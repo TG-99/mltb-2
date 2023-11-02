@@ -1,0 +1,13 @@
+version: "3.3"
+
+services:
+  app:
+    build: .
+    command: bash start.sh
+    restart: on-failure
+    ports:
+      - "${PORT}:${PORT}"
+      - "${BASE_URL_PORT}:${BASE_URL_PORT}"
+      - "${RCLONE_SERVE_PORT}:${RCLONE_SERVE_PORT}"
+    env_file:
+      - .env
