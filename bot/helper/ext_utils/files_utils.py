@@ -9,7 +9,7 @@ from sys import exit as sexit
 
 from .exceptions import NotSupportedExtractionArchive
 from bot import aria2, LOGGER, DOWNLOAD_DIR, get_client, GLOBAL_EXTENSION_FILTER
-from bot.helper.ext_utils.bot_utils import sync_to_async, cmd_exec
+from bot.helper.ext_utils.bot_utils import sync_to_async, async_to_sync, cmd_exec
 
 ARCH_EXT = [
     ".tar.bz2",
@@ -74,7 +74,7 @@ async def clean_target(path):
         try:
             if await aiopath.isdir(path):
                 await aiormtree(path)
-            elif await aiopath.isfile(path):
+            else:
                 await aioremove(path)
         except Exception as e:
             LOGGER.error(str(e))
@@ -89,28 +89,20 @@ async def clean_download(path):
             LOGGER.error(str(e))
 
 
-async def start_cleanup():
-    get_client().torrents_delete(torrent_hashes="all")
-    try:
-        await aiormtree(DOWNLOAD_DIR)
-    except Exception as e:
-        LOGGER.error(str(e))
-    await makedirs(DOWNLOAD_DIR, exist_ok=True)
-
-
-def clean_all():
+async def clean_all():
     aria2.remove_all(True)
     get_client().torrents_delete(torrent_hashes="all")
     try:
-        rmtree(DOWNLOAD_DIR)
-    except Exception as e:
-        LOGGER.error(str(e))
+        await aiormtree(DOWNLOAD_DIR)
+    except:
+        pass
+    await makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
 def exit_clean_up(signal, frame):
     try:
         LOGGER.info("Please wait, while we clean up and stop the running downloads")
-        clean_all()
+        async_to_sync(clean_all)
         srun(["pkill", "-9", "-f", "gunicorn|mltb-a|mltb-q|mltb-f"])
         sexit(0)
     except KeyboardInterrupt:
