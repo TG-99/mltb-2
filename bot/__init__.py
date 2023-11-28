@@ -4,7 +4,7 @@ from pyrogram import Client as tgClient, enums
 from pymongo import MongoClient
 from asyncio import Lock
 from dotenv import load_dotenv, dotenv_values
-from time import time
+from time import sleep, time
 from subprocess import Popen, run as srun
 from os import remove as osremove, path as ospath, environ, getcwd
 from aria2p import API as ariaAPI, Client as ariaClient
