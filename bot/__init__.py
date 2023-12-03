@@ -33,6 +33,7 @@ getLogger("qbittorrentapi").setLevel(INFO)
 getLogger("requests").setLevel(INFO)
 getLogger("urllib3").setLevel(INFO)
 getLogger("pyrogram").setLevel(ERROR)
+getLogger("httpx").setLevel(ERROR)
 
 botStartTime = time()
 
@@ -43,6 +44,8 @@ basicConfig(
 )
 
 LOGGER = getLogger(__name__)
+
+aria2 = ariaAPI(ariaClient(host="http://localhost", port=6800, secret=""))
 
 load_dotenv("config.env", override=True)
 
@@ -449,10 +452,10 @@ srun(["mltb-q", "-d", f"--profile={getcwd()}"])
 if not ospath.exists(".netrc"):
     with open(".netrc", "w"):
         pass
-srun(["chmod", "600", ".netrc"])
-srun(["cp", ".netrc", "/root/.netrc"])
-srun(["chmod", "+x", "aria.sh"])
-srun("./aria.sh", shell=True)
+srun(
+    "chmod 600 .netrc && cp .netrc /root/.netrc && chmod +x aria.sh && ./aria.sh",
+    shell=True,
+)
 alive = Popen(["python3", "alive.py"])
 sleep(0.5)
 if ospath.exists("accounts.zip"):
@@ -464,11 +467,9 @@ if ospath.exists("accounts.zip"):
 if not ospath.exists("accounts"):
     config_dict["USE_SERVICE_ACCOUNTS"] = False
 
-aria2 = ariaAPI(ariaClient(host="http://localhost", port=6800, secret=""))
-
 
 def get_client():
-    return qbClient(host="localhost", port=8090)
+    return qbClient(host="localhost", port=8090, REQUESTS_ARGS={"timeout": (30, 60)})
 
 
 aria2c_global = [
@@ -486,12 +487,6 @@ aria2c_global = [
     "save-cookies",
     "server-stat-of",
 ]
-
-if not aria2_options:
-    aria2_options = aria2.client.get_global_option()
-else:
-    a2c_glo = {op: aria2_options[op] for op in aria2c_global if op in aria2_options}
-    aria2.set_global_options(a2c_glo)
 
 qb_client = get_client()
 if not qbit_options:
@@ -520,3 +515,9 @@ bot = tgClient(
 bot_loop = bot.loop
 
 scheduler = AsyncIOScheduler(timezone=str(get_localzone()), event_loop=bot_loop)
+
+if not aria2_options:
+    aria2_options = aria2.client.get_global_option()
+else:
+    a2c_glo = {op: aria2_options[op] for op in aria2c_global if op in aria2_options}
+    aria2.set_global_options(a2c_glo)
