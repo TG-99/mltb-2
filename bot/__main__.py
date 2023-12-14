@@ -2,6 +2,11 @@ from signal import signal, SIGINT
 from aiofiles.os import path as aiopath, remove as aioremove
 from aiofiles import open as aiopen
 from os import execl as osexecl
+from time import time
+from sys import executable
+from pyrogram.handlers import MessageHandler
+from pyrogram.filters import command
+from asyncio import create_subprocess_exec, gather
 from psutil import (
     disk_usage,
     cpu_percent,
@@ -11,12 +16,16 @@ from psutil import (
     net_io_counters,
     boot_time,
 )
-from time import time
-from sys import executable
-from pyrogram.handlers import MessageHandler
-from pyrogram.filters import command
-from asyncio import create_subprocess_exec, gather
 
+from .helper.ext_utils.files_utils import clean_all, exit_clean_up
+from .helper.ext_utils.bot_utils import cmd_exec, sync_to_async, create_help_buttons
+from .helper.ext_utils.status_utils import get_readable_file_size, get_readable_time
+from .helper.ext_utils.db_handler import DbManger
+from .helper.telegram_helper.bot_commands import BotCommands
+from .helper.telegram_helper.message_utils import sendMessage, editMessage, sendFile
+from .helper.telegram_helper.filters import CustomFilters
+from .helper.telegram_helper.button_build import ButtonMaker
+from bot.helper.listeners.aria2_listener import start_aria2_listener
 from bot import (
     bot,
     botStartTime,
@@ -29,15 +38,6 @@ from bot import (
     config_dict,
     alive,
 )
-from .helper.ext_utils.files_utils import clean_all, exit_clean_up
-from .helper.ext_utils.bot_utils import cmd_exec, sync_to_async, initiate_help_messages
-from .helper.ext_utils.status_utils import get_readable_file_size, get_readable_time
-from .helper.ext_utils.db_handler import DbManger
-from .helper.telegram_helper.bot_commands import BotCommands
-from .helper.telegram_helper.message_utils import sendMessage, editMessage, sendFile
-from .helper.telegram_helper.filters import CustomFilters
-from .helper.telegram_helper.button_build import ButtonMaker
-from bot.helper.listeners.aria2_listener import start_aria2_listener
 from .modules import (
     authorize,
     cancel_task,
@@ -55,6 +55,7 @@ from .modules import (
     eval,
     users_settings,
     bot_settings,
+    help,
     cleandb,
 )
 
@@ -235,8 +236,8 @@ async def main():
         clean_all(),
         torrent_search.initiate_search_tools(),
         restart_notification(),
-        initiate_help_messages(),
     )
+    create_help_buttons()
     await sync_to_async(start_aria2_listener, wait=False)
 
     bot.add_handler(MessageHandler(start, filters=command(BotCommands.StartCommand)))
