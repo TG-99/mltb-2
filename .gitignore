@@ -1,0 +1,14 @@
+config.env
+*.pyc
+data*
+.vscode
+.idea
+.netrc
+log.txt
+accounts/*
+Thumbnails/*
+rclone/*
+cookies.txt
+downloads
+bot.session*
+terabox.txt
