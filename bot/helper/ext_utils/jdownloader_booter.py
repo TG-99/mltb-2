@@ -43,7 +43,9 @@ class JDownloader(Myjdapi):
         self.error = "Connecting... Try agin after couple of seconds"
         self._device_name = f"{randint(0, 1000)}@{bot_name}"
         if await path.exists("/JDownloader/logs"):
-            LOGGER.info("Starting JDownloader... This might take up to 10 sec")
+            LOGGER.info(
+                "Starting JDownloader... This might take up to 10 sec and might restart once if update available!"
+            )
         else:
             LOGGER.info(
                 "Starting JDownloader... This might take up to 8 sec and might restart once after build!"
@@ -71,7 +73,7 @@ class JDownloader(Myjdapi):
             return False
         try:
             await self.connect(config_dict["JD_EMAIL"], config_dict["JD_PASS"])
-            LOGGER.info("JDownloader is connected!")
+            LOGGER.info("MYJDownloader is connected!")
             return True
         except (
             MYJDAuthFailedException,
@@ -95,6 +97,7 @@ class JDownloader(Myjdapi):
         while True:
             self.device = None
             if not config_dict["JD_EMAIL"] or not config_dict["JD_PASS"]:
+                await cmd_exec(["pkill", "-9", "-f", "java"])
                 return
             try:
                 await self.update_devices()
