@@ -319,19 +319,18 @@ async def sync_jdownloader():
         await jdownloader.device.system.exit_jd()
         if await aiopath.exists("cfg.zip"):
             await remove("cfg.zip")
-        await sleep(6)
-        await (
-            await create_subprocess_exec("7z", "a", "cfg.zip", "/JDownloader/cfg")
-        ).wait()
-        await DbManager().update_private_file("cfg.zip")
         try:
-            await wait_for(retry_function(jdownloader.update_devices), timeout=5)
+            await wait_for(retry_function(jdownloader.update_devices), timeout=10)
         except:
             is_connected = await jdownloader.jdconnect()
             if not is_connected:
                 LOGGER.error(jdownloader.error)
                 return
         await jdownloader.connectToDevice()
+        await (
+            await create_subprocess_exec("7z", "a", "cfg.zip", "/JDownloader/cfg")
+        ).wait()
+        await DbManager().update_private_file("cfg.zip")
 
 
 async def update_private_file(_, message, pre_message):
@@ -527,6 +526,8 @@ async def edit_bot_settings(client, query):
             await DbManager().trunc_table("tasks")
         elif data[2] in ["JD_EMAIL", "JD_PASS"]:
             jdownloader.device = None
+            jdownloader.error = "JDownloader Credentials not provided!"
+            await create_subprocess_exec(["pkill", "-9", "-f", "java"])
         config_dict[data[2]] = value
         await update_buttons(message, "var")
         if DATABASE_URL:
