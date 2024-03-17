@@ -50,7 +50,7 @@ class ExtractStatus:
         except:
             return "-"
 
-    async def status(self):
+    def status(self):
         return MirrorStatus.STATUS_EXTRACTING
 
     def processed_bytes(self):
