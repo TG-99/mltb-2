@@ -6,12 +6,16 @@ from logging import (
     basicConfig,
     error as log_error,
     info as log_info,
+    getLogger,
+    ERROR,
 )
 from requests import get as rget
 from os import path, environ, remove
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from subprocess import run as srun
+
+getLogger("pymongo").setLevel(ERROR)
 
 if path.exists("log.txt"):
     with open("log.txt", "r+") as f:
