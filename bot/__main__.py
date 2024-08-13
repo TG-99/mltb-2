@@ -97,7 +97,7 @@ async def stats(_, message):
 
 async def start(client, message):
     buttons = ButtonMaker()
-    buttons.ubutton("GD Index", "https://gdrive.rir18.workers.dev")
+    buttons.ubutton("GD Index", "https://gdrive.blactape75.tech")
     buttons.ubutton("Web Server", f"{config_dict['BASE_URL']}")
     reply_markup = buttons.build_menu(2)
     if await CustomFilters.authorized(client, message):

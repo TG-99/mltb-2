@@ -252,5 +252,17 @@ class DbManager:
         await self._db.settings.config.delete_one({'_id': bot_id})
         self._conn.close
 
+    async def clean_all_private_files(self):
+        if self._err:
+            return
+        await self._db.settings.files.drop()
+        self._conn.close
+
+    async def clean_private_files(self, dict_):
+        if self._err:
+            return
+        await self._db.settings.files.delete_one({'_id': bot_id})
+        self._conn.close
+
 if DATABASE_URL:
     bot_loop.run_until_complete(DbManager().db_load())
