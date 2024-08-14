@@ -1,5 +1,5 @@
 from httpx import AsyncClient
-from asyncio import wait_for, Event, wrap_future
+from asyncio import wait_for, Event
 from functools import partial
 from pyrogram.filters import command, regex, user
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
@@ -10,7 +10,6 @@ from bot import DOWNLOAD_DIR, bot, config_dict, LOGGER
 from bot.helper.ext_utils.bot_utils import (
     new_task,
     sync_to_async,
-    new_thread,
     arg_parser,
     COMMAND_USAGE,
 )
@@ -28,7 +27,6 @@ from bot.helper.telegram_helper.message_utils import (
 )
 
 
-@new_task
 async def select_format(_, query, obj):
     data = query.data.split()
     message = query.message
@@ -76,7 +74,6 @@ class YtSelection:
         self.formats = {}
         self.qual = None
 
-    @new_thread
     async def _event_handler(self):
         pfunc = partial(select_format, obj=self)
         handler = self.listener.client.add_handler(
@@ -96,7 +93,6 @@ class YtSelection:
             self.listener.client.remove_handler(*handler)
 
     async def get_quality(self, result):
-        future = self._event_handler()
         buttons = ButtonMaker()
         if "entries" in result:
             self._is_playlist = True
@@ -172,7 +168,7 @@ class YtSelection:
         self._reply_to = await sendMessage(
             self.listener.message, msg, self._main_buttons
         )
-        await wrap_future(future)
+        await self._event_handler()
         if not self.listener.isCancelled:
             await deleteMessage(self._reply_to)
         return self.qual
@@ -245,7 +241,9 @@ def extract_info(link, options):
 async def _mdisk(link, name):
     key = link.split("/")[-1]
     async with AsyncClient(verify=False) as client:
-        resp = await client.get(f"https://diskuploader.entertainvideo.com/v1/file/cdnurl?param={key}")
+        resp = await client.get(
+            f"https://diskuploader.entertainvideo.com/v1/file/cdnurl?param={key}"
+        )
     if resp.status_code == 200:
         resp_json = resp.json()
         link = resp_json["source"]
@@ -262,6 +260,7 @@ class YtDlp(TaskListener):
         _=None,
         isLeech=False,
         __=None,
+        ___=None,
         sameDir=None,
         bulk=None,
         multiTag=None,
@@ -387,7 +386,7 @@ class YtDlp(TaskListener):
             return
 
         if "mdisk.me" in self.link:
-            name, self.link = await _mdisk(self.link, name)
+            self.name, self.link = await _mdisk(self.link, self.name)
 
         try:
             await self.beforeStart()
@@ -457,12 +456,13 @@ async def ytdlleech(client, message):
 
 bot.add_handler(
     MessageHandler(
-        ytdl, filters=command(BotCommands.YtdlCommand) & CustomFilters.authorized
+        ytdl, filters=command(BotCommands.YtdlCommand, case_sensitive=True) & CustomFilters.authorized
     )
 )
 bot.add_handler(
     MessageHandler(
         ytdlleech,
-        filters=command(BotCommands.YtdlLeechCommand) & CustomFilters.authorized,
+        filters=command(BotCommands.YtdlLeechCommand, case_sensitive=True)
+        & CustomFilters.authorized,
     )
 )

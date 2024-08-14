@@ -5,7 +5,7 @@ from bot.helper.ext_utils.status_utils import (
 )
 from pkg_resources import get_distribution
 
-eng = f"Pyrogram v{get_distribution('pyrogram').version}"
+eng = f"Pyrofork v{get_distribution('pyrofork').version}"
 
 
 class TelegramStatus:

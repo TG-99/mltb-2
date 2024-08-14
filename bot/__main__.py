@@ -1,6 +1,6 @@
 from aiofiles import open as aiopen
 from aiofiles.os import path as aiopath, remove
-from asyncio import gather, create_subprocess_exec, sleep
+from asyncio import gather, create_subprocess_exec
 from os import execl as osexecl
 from psutil import (
     disk_usage,
@@ -25,6 +25,7 @@ from bot import (
     DATABASE_URL,
     INCOMPLETE_TASK_NOTIFIER,
     scheduler,
+    sabnzbd_client,
     config_dict,
     alive,
 )
@@ -45,13 +46,13 @@ from .modules import (
     cancel_task,
     clone,
     exec,
+    file_selector,
     gd_count,
     gd_delete,
     gd_search,
     mirror_leech,
     status,
     torrent_search,
-    torrent_select,
     ytdlp,
     rss,
     shell,
@@ -60,7 +61,7 @@ from .modules import (
     help,
     force_start,
     cleandb,
-)
+)  # noqa: F401
 
 
 async def stats(_, message):
@@ -123,14 +124,23 @@ async def restart(_, message):
         qb.cancel()
     if jd := Intervals["jd"]:
         jd.cancel()
+    if nzb := Intervals["nzb"]:
+        nzb.cancel()
     if st := Intervals["status"]:
         for intvl in list(st.values()):
             intvl.cancel()
-    await sleep(1)
     await sync_to_async(clean_all)
-    await sleep(1)
+    if sabnzbd_client.LOGGED_IN:
+        await gather(
+            sabnzbd_client.pause_all(),
+            sabnzbd_client.purge_all(True),
+            sabnzbd_client.delete_history("all", delete_files=True),
+        )
     proc1 = await create_subprocess_exec(
-        "pkill", "-9", "-f", "gunicorn|mltb-a|mltb-q|mltb-f|rclone|java|nginx"
+        "pkill",
+        "-9",
+        "-f",
+        "gunicorn|mltb-a|mltb-q|mltb-f|rclone|java|nginx|mltb-s",
     )
     proc2 = await create_subprocess_exec("python3", "update.py")
     await gather(proc1.wait(), proc2.wait())
@@ -152,20 +162,22 @@ async def log(_, message):
 
 help_string = f"""
 NOTE: Try each command without any argument to see more detalis.
-/{BotCommands.MirrorCommand[0]} or /{BotCommands.MirrorCommand[1]}: Start mirroring to Google Drive.
-/{BotCommands.QbMirrorCommand[0]} or /{BotCommands.QbMirrorCommand[1]}: Start Mirroring to Google Drive using qBittorrent.
-/{BotCommands.JdMirrorCommand[0]} or /{BotCommands.JdMirrorCommand[1]}: Start Mirroring to Google Drive using JDownloader.
+/{BotCommands.MirrorCommand[0]} or /{BotCommands.MirrorCommand[1]}: Start mirroring to cloud.
+/{BotCommands.QbMirrorCommand[0]} or /{BotCommands.QbMirrorCommand[1]}: Start Mirroring to cloud using qBittorrent.
+/{BotCommands.JdMirrorCommand[0]} or /{BotCommands.JdMirrorCommand[1]}: Start Mirroring to cloud using JDownloader.
+/{BotCommands.NzbMirrorCommand[0]} or /{BotCommands.NzbMirrorCommand[1]}: Start Mirroring to cloud using Sabnzbd.
 /{BotCommands.YtdlCommand[0]} or /{BotCommands.YtdlCommand[1]}: Mirror yt-dlp supported link.
 /{BotCommands.LeechCommand[0]} or /{BotCommands.LeechCommand[1]}: Start leeching to Telegram.
 /{BotCommands.QbLeechCommand[0]} or /{BotCommands.QbLeechCommand[1]}: Start leeching using qBittorrent.
 /{BotCommands.JdLeechCommand[0]} or /{BotCommands.JdLeechCommand[1]}: Start leeching using JDownloader.
+/{BotCommands.NzbLeechCommand[0]} or /{BotCommands.NzbLeechCommand[1]}: Start leeching using Sabnzbd.
 /{BotCommands.YtdlLeechCommand[0]} or /{BotCommands.YtdlLeechCommand[1]}: Leech yt-dlp supported link.
 /{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
 /{BotCommands.CountCommand} [drive_url]: Count file/folder of Google Drive.
 /{BotCommands.DeleteCommand} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo).
 /{BotCommands.UserSetCommand[0]} or /{BotCommands.UserSetCommand[1]} [query]: Users settings.
 /{BotCommands.BotSetCommand[0]} or /{BotCommands.BotSetCommand[1]} [query]: Bot settings.
-/{BotCommands.BtSelectCommand}: Select files from torrents by gid or reply.
+/{BotCommands.SelectCommand}: Select files from torrents or nzb by gid or reply.
 /{BotCommands.CancelTaskCommand[0]} or /{BotCommands.CancelTaskCommand[1]} [gid]: Cancel task by gid or reply.
 /{BotCommands.ForceStartCommand[0]} or /{BotCommands.ForceStartCommand[1]} [gid]: Force start task by gid or reply.
 /{BotCommands.CancelAllCommand} [query]: Cancel all [status] tasks.
@@ -201,7 +213,7 @@ async def restart_notification():
     else:
         chat_id, msg_id = 0, 0
 
-    async def send_incompelete_task_message(cid, msg):
+    async def send_incomplete_task_message(cid, msg):
         try:
             if msg.startswith("Restarted Successfully!"):
                 await bot.edit_message_text(
@@ -227,10 +239,10 @@ async def restart_notification():
                     for index, link in enumerate(links, start=1):
                         msg += f" <a href='{link}'>{index}</a> |"
                         if len(msg.encode()) > 4000:
-                            await send_incompelete_task_message(cid, msg)
+                            await send_incomplete_task_message(cid, msg)
                             msg = ""
                 if msg:
-                    await send_incompelete_task_message(cid, msg)
+                    await send_incomplete_task_message(cid, msg)
 
     if await aiopath.isfile(".restartmsg"):
         try:
@@ -243,6 +255,8 @@ async def restart_notification():
 
 
 async def main():
+    if DATABASE_URL:
+        await DbManager().db_load()
     jdownloader.initiate()
     await gather(
         sync_to_async(clean_all),
@@ -254,31 +268,44 @@ async def main():
     )
     create_help_buttons()
 
-    bot.add_handler(MessageHandler(start, filters=command(BotCommands.StartCommand)))
     bot.add_handler(
         MessageHandler(
-            log, filters=command(BotCommands.LogCommand) & CustomFilters.sudo
+            start, filters=command(BotCommands.StartCommand, case_sensitive=True)
         )
     )
     bot.add_handler(
         MessageHandler(
-            restart, filters=command(BotCommands.RestartCommand) & CustomFilters.sudo
+            log,
+            filters=command(BotCommands.LogCommand, case_sensitive=True)
+            & CustomFilters.sudo,
         )
     )
     bot.add_handler(
         MessageHandler(
-            ping, filters=command(BotCommands.PingCommand) & CustomFilters.authorized
+            restart,
+            filters=command(BotCommands.RestartCommand, case_sensitive=True)
+            & CustomFilters.sudo,
+        )
+    )
+    bot.add_handler(
+        MessageHandler(
+            ping,
+            filters=command(BotCommands.PingCommand, case_sensitive=True)
+            & CustomFilters.authorized,
         )
     )
     bot.add_handler(
         MessageHandler(
             bot_help,
-            filters=command(BotCommands.HelpCommand) & CustomFilters.authorized,
+            filters=command(BotCommands.HelpCommand, case_sensitive=True)
+            & CustomFilters.authorized,
         )
     )
     bot.add_handler(
         MessageHandler(
-            stats, filters=command(BotCommands.StatsCommand) & CustomFilters.authorized
+            stats,
+            filters=command(BotCommands.StatsCommand, case_sensitive=True)
+            & CustomFilters.authorized,
         )
     )
     LOGGER.info("Bot Started!")

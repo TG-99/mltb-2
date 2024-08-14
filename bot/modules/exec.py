@@ -88,7 +88,7 @@ async def do(func, message):
             func_return = (
                 await sync_to_async(rfunc) if func == "exec" else await rfunc()
             )
-    except Exception as e:
+    except:
         value = stdout.getvalue()
         return f"{value}{format_exc()}"
     else:
@@ -118,16 +118,22 @@ async def clear(_, message):
 
 bot.add_handler(
     MessageHandler(
-        aioexecute, filters=command(BotCommands.AExecCommand) & CustomFilters.owner
+        aioexecute,
+        filters=command(BotCommands.AExecCommand, case_sensitive=True)
+        & CustomFilters.owner,
     )
 )
 bot.add_handler(
     MessageHandler(
-        execute, filters=command(BotCommands.ExecCommand) & CustomFilters.owner
+        execute,
+        filters=command(BotCommands.ExecCommand, case_sensitive=True)
+        & CustomFilters.owner,
     )
 )
 bot.add_handler(
     MessageHandler(
-        clear, filters=command(BotCommands.ClearLocalsCommand) & CustomFilters.owner
+        clear,
+        filters=command(BotCommands.ClearLocalsCommand, case_sensitive=True)
+        & CustomFilters.owner,
     )
 )

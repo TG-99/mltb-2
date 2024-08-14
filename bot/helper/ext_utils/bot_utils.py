@@ -6,7 +6,6 @@ from asyncio import (
     sleep,
 )
 from asyncio.subprocess import PIPE
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial, wraps
 
 from bot import user_data, config_dict, bot_loop
@@ -17,8 +16,6 @@ from bot.helper.ext_utils.help_messages import (
 )
 from bot.helper.ext_utils.telegraph_helper import telegraph
 from bot.helper.telegram_helper.button_build import ButtonMaker
-
-THREADPOOL = ThreadPoolExecutor(max_workers=1000)
 
 COMMAND_USAGE = {}
 
@@ -57,19 +54,19 @@ def create_help_buttons():
 
 
 def bt_selection_buttons(id_):
-    gid = id_[:12] if len(id_) > 20 else id_
+    gid = id_[:12] if len(id_) > 25 else id_
     pincode = "".join([n for n in id_ if n.isdigit()][:4])
     buttons = ButtonMaker()
     BASE_URL = config_dict["BASE_URL"]
     if config_dict["WEB_PINCODE"]:
         buttons.ubutton("Select Files", f"{BASE_URL}/app/files/{id_}")
-        buttons.ibutton("Pincode", f"btsel pin {gid} {pincode}")
+        buttons.ibutton("Pincode", f"sel pin {gid} {pincode}")
     else:
         buttons.ubutton(
             "Select Files", f"{BASE_URL}/app/files/{id_}?pin_code={pincode}"
         )
-    buttons.ibutton("Done Selecting", f"btsel done {gid} {id_}")
-    buttons.ibutton("Cancel", f"btsel cancel {gid}")
+    buttons.ibutton("Done Selecting", f"sel done {gid} {id_}")
+    buttons.ibutton("Cancel", f"sel cancel {gid}")
     return buttons.build_menu(2)
 
 
@@ -206,7 +203,7 @@ def new_task(func):
 
 async def sync_to_async(func, *args, wait=True, **kwargs):
     pfunc = partial(func, *args, **kwargs)
-    future = bot_loop.run_in_executor(THREADPOOL, pfunc)
+    future = bot_loop.run_in_executor(None, pfunc)
     return await future if wait else future
 
 

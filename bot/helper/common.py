@@ -21,6 +21,7 @@ from bot import (
     GLOBAL_EXTENSION_FILTER,
     cpu_eater_lock,
     subprocess_lock,
+    Intervals,
 )
 from bot.helper.ext_utils.bot_utils import new_task, sync_to_async, getSizeBytes
 from bot.helper.ext_utils.bulk_links import extractBulkLinks
@@ -89,6 +90,7 @@ class TaskConfig:
         self.size = 0
         self.isLeech = False
         self.isQbit = False
+        self.isNzb = False
         self.isJd = False
         self.isClone = False
         self.isYtDlp = False
@@ -137,6 +139,10 @@ class TaskConfig:
         )
 
     async def isTokenExists(self, path, status):
+        if not self.upDest:
+            raise ValueError("No Upload Destination!")
+        if not is_gdrive_id(self.upDest) and not is_rclone_path(self.upDest):
+            raise ValueError("Wrong Upload Destination!")
         if is_rclone_path(path):
             config_path = self.getConfigPath(path)
             if config_path != "rclone.conf" and status == "up":
@@ -159,20 +165,30 @@ class TaskConfig:
         self.nameSub = (
             self.nameSub
             or self.userDict.get("name_sub", False)
-            or config_dict["NAME_SUBSTITUTE"]
-            if "name_sub" not in self.userDict
-            else ""
+            or (
+                config_dict["NAME_SUBSTITUTE"]
+                if "name_sub" not in self.userDict
+                else ""
+            )
         )
         if self.nameSub:
-            self.nameSub = [x.split(" : ") for x in self.nameSub.split("|")]
+            self.nameSub = [x.split(" : ") for x in self.nameSub.split(" | ")]
             self.seed = False
-        self.extensionFilter = (
-            self.userDict.get("excluded_extensions") or GLOBAL_EXTENSION_FILTER
+        self.extensionFilter = self.userDict.get("excluded_extensions") or (
+            GLOBAL_EXTENSION_FILTER
             if "excluded_extensions" not in self.userDict
             else ["aria2", "!qB"]
         )
         if self.link not in ["rcl", "gdl"]:
-            if not self.isYtDlp and not self.isJd:
+            if (
+                not self.isYtDlp
+                and not self.isJd
+                and (
+                    is_gdrive_id(self.link)
+                    or is_rclone_path(self.link)
+                    or is_gdrive_link(self.link)
+                )
+            ):
                 await self.isTokenExists(self.link, "dl")
         elif self.link == "rcl":
             if not self.isYtDlp and not self.isJd:
@@ -213,10 +229,6 @@ class TaskConfig:
                 )
             elif (not self.upDest and default_upload == "gd") or self.upDest == "gd":
                 self.upDest = self.userDict.get("gdrive_id") or config_dict["GDRIVE_ID"]
-            if not self.upDest:
-                raise ValueError("No Upload Destination!")
-            if not is_gdrive_id(self.upDest) and not is_rclone_path(self.upDest):
-                raise ValueError("Wrong Upload Destination!")
             if self.upDest not in ["rcl", "gdl"]:
                 await self.isTokenExists(self.upDest, "up")
 
@@ -341,7 +353,12 @@ class TaskConfig:
 
     async def getTag(self, text: list):
         if len(text) > 1 and text[1].startswith("Tag: "):
-            self.tag, id_ = text[1].split("Tag: ")[1].split()
+            user_info = text[1].split("Tag: ")
+            if len(user_info) >= 3:
+                id_ = user_info[-1]
+                self.tag = " ".join(user_info[:-1])
+            else:
+                self.tag, id_ = text[1].split("Tag: ")[1].split()
             self.user = self.message.from_user = await self.client.get_users(id_)
             self.userId = self.user.id
             self.userDict = user_data.get(self.userId, {})
@@ -364,7 +381,8 @@ class TaskConfig:
             self.multiTag = token_urlsafe(3)
             multi_tags.add(self.multiTag)
         elif self.multi <= 1:
-            multi_tags.discard(self.multiTag)
+            if self.multiTag in multi_tags:
+                multi_tags.discard(self.multiTag)
             return
         if self.multiTag and self.multiTag not in multi_tags:
             await sendMessage(
@@ -400,12 +418,15 @@ class TaskConfig:
             nextmsg.from_user = self.user
         else:
             nextmsg.sender_chat = self.user
+        if Intervals["stopAll"]:
+            return
         obj(
             self.client,
             nextmsg,
             self.isQbit,
             self.isLeech,
             self.isJd,
+            self.isNzb,
             self.sameDir,
             self.bulk,
             self.multiTag,
@@ -439,6 +460,7 @@ class TaskConfig:
                 self.isQbit,
                 self.isLeech,
                 self.isJd,
+                self.isNzb,
                 self.sameDir,
                 self.bulk,
                 self.multiTag,
@@ -575,10 +597,10 @@ class TaskConfig:
         pswd = self.compress if isinstance(self.compress, str) else ""
         if self.seed and not self.newDir:
             self.newDir = f"{self.dir}10000"
-            up_path = f"{self.newDir}/{self.name}.zip"
+            up_path = f"{self.newDir}/{self.name}.7z"
             delete = False
         else:
-            up_path = f"{dl_path}.zip"
+            up_path = f"{dl_path}.7z"
             delete = True
         async with task_dict_lock:
             task_dict[self.mid] = ZipStatus(self, gid)
@@ -921,10 +943,12 @@ class TaskConfig:
     async def substitute(self, dl_path):
         if await aiopath.isfile(dl_path):
             up_dir, name = dl_path.rsplit("/", 1)
-            for l in self.nameSub:
-                pattern = l[0]
-                res = l[1] if len(l) > 1 and l[1] else ""
-                sen = len(l) > 2 and l[2] == "s"
+            for substitution in self.nameSub:
+                pattern = substitution[0]
+                res = (
+                    substitution[1] if len(substitution) > 1 and substitution[1] else ""
+                )
+                sen = len(substitution) > 2 and substitution[2] == "s"
                 new_name = sub(rf"{pattern}", res, name, flags=I if sen else 0)
             new_path = ospath.join(up_dir, new_name)
             await move(dl_path, new_path)
@@ -933,10 +957,14 @@ class TaskConfig:
             for dirpath, _, files in await sync_to_async(walk, dl_path, topdown=False):
                 for file_ in files:
                     f_path = ospath.join(dirpath, file_)
-                    for l in self.nameSub:
-                        pattern = l[0]
-                        res = l[1] if len(l) > 1 and l[1] else ""
-                        sen = len(l) > 2 and l[2] == "s"
+                    for substitution in self.nameSub:
+                        pattern = substitution[0]
+                        res = (
+                            substitution[1]
+                            if len(substitution) > 1 and substitution[1]
+                            else ""
+                        )
+                        sen = len(substitution) > 2 and substitution[2] == "s"
                         new_name = sub(rf"{pattern}", res, file_, flags=I if sen else 0)
                     await move(f_path, ospath.join(dirpath, new_name))
             return dl_path

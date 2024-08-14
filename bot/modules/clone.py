@@ -8,7 +8,6 @@ from bot import LOGGER, task_dict, task_dict_lock, bot
 from bot.helper.ext_utils.bot_utils import (
     new_task,
     sync_to_async,
-    new_task,
     cmd_exec,
     arg_parser,
     COMMAND_USAGE,
@@ -48,6 +47,7 @@ class Clone(TaskListener):
         __=None,
         ___=None,
         ____=None,
+        _____=None,
         bulk=None,
         multiTag=None,
         options="",
@@ -290,6 +290,8 @@ async def clone(client, message):
 
 bot.add_handler(
     MessageHandler(
-        clone, filters=command(BotCommands.CloneCommand) & CustomFilters.authorized
+        clone,
+        filters=command(BotCommands.CloneCommand, case_sensitive=True)
+        & CustomFilters.authorized,
     )
 )

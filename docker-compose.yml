@@ -9,5 +9,7 @@ services:
       - "${PORT}:${PORT}"
       - "${BASE_URL_PORT}:${BASE_URL_PORT}"
       - "${RCLONE_SERVE_PORT}:${RCLONE_SERVE_PORT}"
+      - "8070:8070"
+      - "8090:8090"
     env_file:
       - .env
