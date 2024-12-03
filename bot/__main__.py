@@ -316,7 +316,7 @@ async def main():
             & CustomFilters.authorized,
         )
     )
-    LOGGER.info("Bot Started!")
+    LOGGER.info(f"Bot Started! DC:{bot.session.dc_id}.")
     signal(SIGINT, exit_clean_up)
 
 
