@@ -242,6 +242,8 @@ class TaskConfig:
             )
             if (not self.up_dest and default_upload == "rc") or self.up_dest == "rc":
                 self.up_dest = self.user_dict.get("rclone_path") or Config.RCLONE_PATH
+            elif (not self.up_dest and default_upload == "ddl") or self.up_dest == "ddl":
+                self.up_dest = "ddl"
             elif (not self.up_dest and default_upload == "gd") or self.up_dest == "gd":
                 self.up_dest = self.user_dict.get("gdrive_id") or Config.GDRIVE_ID
             if not self.up_dest:
@@ -256,10 +258,12 @@ class TaskConfig:
                     "user_tokens", False
                 ):
                     self.up_dest = f"mrcc:{self.up_dest}"
+            elif (not self.up_dest and default_upload == "ddl") or self.up_dest == "ddl":
+                self.up_dest = "ddl"
             else:
                 raise ValueError("Wrong Upload Destination!")
 
-            if self.up_dest not in ["rcl", "gdl"]:
+            if self.up_dest not in ["rcl", "gdl", "ddl"]:
                 await self.is_token_exists(self.up_dest, "up")
 
             if self.up_dest == "rcl":

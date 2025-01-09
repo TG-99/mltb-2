@@ -61,6 +61,7 @@ class Config:
     YT_DLP_OPTIONS = ""
     MEGA_EMAIL = ""
     MEGA_PASSWORD = ""
+    DDL_SERVERS = ""
 
     @classmethod
     def get(cls, key):
@@ -93,8 +94,8 @@ class Config:
                     continue
                 if isinstance(value, str):
                     value = value.strip()
-                if attr == "DEFAULT_UPLOAD" and value != "gd":
-                    value = "rc"
+                if attr == "DEFAULT_UPLOAD" and value != "rc" and value != "ddl":
+                    value = "gd"
                 elif attr == "DOWNLOAD_DIR" and not value.endswith("/"):
                     value = f"{value}/"
                 elif attr == "USENET_SERVERS":
@@ -115,8 +116,8 @@ class Config:
     def load_dict(cls, config_dict):
         for key, value in config_dict.items():
             if hasattr(cls, key):
-                if key == "DEFAULT_UPLOAD" and value != "gd":
-                    value = "rc"
+                if key == "DEFAULT_UPLOAD" and value != "rc" and value != "ddl":
+                    value = "gd"
                 elif key == "DOWNLOAD_DIR":
                     if not value.endswith("/"):
                         value = f"{value}/"
