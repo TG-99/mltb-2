@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 from os import path as ospath
 from os import walk
 from random import choice
@@ -7,8 +8,8 @@ from aiofiles.os import path as aiopath
 from aiofiles.os import rename as aiorename
 from aiohttp import ClientSession
 
-from ..... import LOGGER
-from .....core.config_manager import Config
+from .... import LOGGER
+from ....core.config_manager import Config
 from bot.helper.ext_utils.bot_utils import sync_to_async
 
 
@@ -61,9 +62,15 @@ class Gofile:
                 res = await resp.json()
                 if res["status"] == "ok":
                     acc_id = res["data"]["id"]
-                    async with session.get(f"{self.api_url}accounts/{acc_id}?token={self.token}") as resp2:
+                    async with session.get(
+                        f"{self.api_url}accounts/{acc_id}?token={self.token}"
+                    ) as resp2:
                         res2 = await resp2.json()
-                        return res2["status"] == "ok" if check_account else await self.__resp_handler(res2)
+                        return (
+                            res2["status"] == "ok"
+                            if check_account
+                            else await self.__resp_handler(res2)
+                        )
 
     async def upload_folder(self, path, folderId=None):
         if not await aiopath.isdir(path):
@@ -73,16 +80,18 @@ class Gofile:
             (await self.__getAccount())["rootFolder"], ospath.basename(path)
         )
         await self.__setOptions(
-            contentId=folder_data["folderId"], option="public", value="true"
+            contentId=folder_data["id"], option="public", value="true"
         )
 
-        folderId = folderId or folder_data["folderId"]
+        folderId = folderId or folder_data["id"]
         folder_ids = {".": folderId}
         for root, _, files in await sync_to_async(walk, path):
             rel_path = ospath.relpath(root, path)
             parentFolderId = folder_ids.get(ospath.dirname(rel_path), folderId)
             folder_name = ospath.basename(rel_path)
-            currFolderId = (await self.create_folder(parentFolderId, folder_name))["folderId"]
+            currFolderId = (await self.create_folder(parentFolderId, folder_name))[
+                "id"
+            ]
             await self.__setOptions(
                 contentId=currFolderId, option="public", value="true"
             )
@@ -90,11 +99,59 @@ class Gofile:
 
             for file in files:
                 file_path = ospath.join(root, file)
-                await self.upload_file(file_path, currFolderId)
+                await self.upload_files_of_folder(file_path, currFolderId)
 
         return folder_data["code"]
 
     async def upload_file(
+        self,
+        path: str,
+        folderId: str = "",
+        description: str = "",
+        password: str = "",
+        tags: str = "",
+        expire: str = "",
+    ):
+        folder_data = await self.create_folder(
+            (await self.__getAccount())["rootFolder"], os.path.splitext(os.path.basename(path))[0]
+        )
+        await self.__setOptions(
+            contentId=folder_data["id"], option="public", value="true"
+        )
+        if password and len(password) < 4:
+            raise ValueError("Password Length must be greater than 4")
+
+        server = choice((await self.__getServer())["servers"])["name"]
+        req_dict = {}
+        if token := self.token or "":
+            req_dict["token"] = token
+        folderId = folderId or folder_data["id"]
+        req_dict["folderId"] = folderId
+        if description:
+            req_dict["description"] = description
+        if password:
+            req_dict["password"] = password
+        if tags:
+            req_dict["tags"] = tags
+        if expire:
+            req_dict["expire"] = expire
+
+        if self.dluploader.is_cancelled:
+            return
+        new_path = ospath.join(
+            ospath.dirname(path), ospath.basename(path).replace(" ", ".")
+        )
+        await aiorename(path, new_path)
+        self.dluploader.last_uploaded = 0
+        upload_file = await self.dluploader.upload_aiohttp(
+            f"https://{server}.gofile.io/contents/uploadfile",
+            new_path,
+            "file",
+            req_dict,
+        )
+        return await self.__resp_handler(upload_file)
+
+    async def upload_files_of_folder(
         self,
         path: str,
         folderId: str = "",
@@ -128,18 +185,18 @@ class Gofile:
         )
         await aiorename(path, new_path)
         self.dluploader.last_uploaded = 0
-        upload_file = await self.dluploader.upload_aiohttp(
+        upload_files_of_folder = await self.dluploader.upload_aiohttp(
             f"https://{server}.gofile.io/contents/uploadfile",
             new_path,
             "file",
             req_dict,
         )
-        return await self.__resp_handler(upload_file)
+        return await self.__resp_handler(upload_files_of_folder)
 
     async def upload(self, file_path):
         if not await self.is_goapi(self.token):
             raise Exception("Invalid Gofile API Key, Recheck your account !!")
-        
+
         if await aiopath.isfile(file_path):
             if (gCode := await self.upload_file(path=file_path)) and gCode.get(
                 "downloadPage", False
@@ -173,7 +230,14 @@ class Gofile:
         if self.token is None:
             raise Exception("Invalid Gofile API Key, Recheck your account !!")
 
-        if option not in ["name", "description", "tags", "public", "expiry", "password"]:
+        if option not in [
+            "name",
+            "description",
+            "tags",
+            "public",
+            "expiry",
+            "password",
+        ]:
             raise Exception(f"Invalid GoFile Option Specified : {option}")
         async with ClientSession() as session:
             async with session.put(
@@ -199,7 +263,7 @@ class Gofile:
     async def copy_content(self, contentsId, folderIdDest):
         if self.token is None:
             raise Exception("Invalid Gofile API Key, Recheck your account !!")
-        
+
         async with ClientSession() as session:
             async with session.post(
                 url=f"{self.api_url}contents/copy",
@@ -214,11 +278,10 @@ class Gofile:
     async def delete_content(self, contentId):
         if self.token is None:
             raise Exception("Invalid Gofile API Key, Recheck your account !!")
-        
+
         async with ClientSession() as session:
             async with session.delete(
                 url=f"{self.api_url}contents/{contentId}",
                 data={"token": self.token},
             ) as resp:
                 return await self.__resp_handler(await resp.json())
-                

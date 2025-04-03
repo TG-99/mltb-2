@@ -7,14 +7,18 @@ from io import BufferedReader
 from re import findall as re_findall
 from aiofiles.os import path as aiopath
 from time import time
-from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
-from aiohttp import ClientSession 
+from tenacity import (
+    retry,
+    wait_exponential,
+    stop_after_attempt,
+    retry_if_exception_type,
+)
+from aiohttp import ClientSession
 from aiohttp.client_exceptions import ContentTypeError
 
 from .... import LOGGER
 from ....core.config_manager import Config
-from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.gofile import Gofile
-from bot.helper.mirror_leech_utils.ddl_utils.ddlserver.streamtape import Streamtape
+from bot.helper.mirror_leech_utils.ddl_utils.gofile import Gofile
 from bot.helper.ext_utils.files_utils import get_mime_type
 
 
@@ -89,16 +93,6 @@ class DDLUploader:
                     self.__engine = "GoFile API"
                     nlink = await Gofile(self, api_key).upload(file_path)
                     all_links["GoFile"] = nlink
-                if serv == "streamtape":
-                    self.__engine = "StreamTape API"
-                    try:
-                        login, key = api_key.split(":")
-                    except IndexError as e:
-                        raise Exception(
-                            "StreamTape Login & Key not Found, Kindly Recheck !"
-                        ) from e
-                    nlink = await Streamtape(self, login, key).upload(file_path)
-                    all_links["StreamTape"] = nlink
                 self.__processed_bytes = 0
         if not all_links:
             raise Exception("No DDL Enabled to Upload.")
@@ -144,7 +138,7 @@ class DDLUploader:
     @property
     def processed_bytes(self):
         return self.__processed_bytes
-    
+
     @property
     def engine(self):
         return self.__engine
