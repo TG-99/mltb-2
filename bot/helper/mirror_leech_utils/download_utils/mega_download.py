@@ -3,14 +3,14 @@ from aiofiles.os import makedirs
 
 from mega import MegaApi
 
-from bot import (
+from .... import (
     LOGGER,
-    config_dict,
     task_dict,
     task_dict_lock,
     non_queued_dl,
     queue_dict_lock
 )
+from ....core.config_manager import Config
 from ...ext_utils.links_utils import get_mega_link_type
 from ...ext_utils.bot_utils import sync_to_async
 
@@ -34,8 +34,8 @@ from ...listeners.mega_listener import (
 
 
 async def add_mega_download(listener, path):
-    MAIL = config_dict["MEGA_EMAIL"]
-    PASS = config_dict["MEGA_PASSWORD"]
+    MAIL = Config.MEGA_EMAIL
+    PASS = Config.MEGA_PASSWORD
 
     executor = AsyncExecutor()
     api = MegaApi(

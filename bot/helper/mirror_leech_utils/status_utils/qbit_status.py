@@ -1,6 +1,6 @@
 from asyncio import sleep, gather
 
-from bot import LOGGER, qbittorrent_client, qb_torrents, qb_listener_lock
+from .... import LOGGER, qbittorrent_client, qb_torrents, qb_listener_lock
 from ...ext_utils.bot_utils import sync_to_async
 from ...ext_utils.status_utils import (
     MirrorStatus,
@@ -17,8 +17,6 @@ def get_download(tag, old_info=None):
         LOGGER.error(f"{e}: Qbittorrent, while getting torrent info. Tag: {tag}")
         return old_info
 
-eng = f"qBittorrent {qbittorrent_client.app.version}"
-
 
 class QbittorrentStatus:
     def __init__(self, listener, seeding=False, queued=False):
@@ -26,7 +24,7 @@ class QbittorrentStatus:
         self.seeding = seeding
         self.listener = listener
         self._info = None
-        self.engine = eng
+        self.engine = "QB"
 
     def update(self):
         self._info = get_download(f"{self.listener.mid}", self._info)
@@ -59,14 +57,14 @@ class QbittorrentStatus:
             return MirrorStatus.STATUS_QUEUEDL
         elif state == "queuedUP":
             return MirrorStatus.STATUS_QUEUEUP
-        elif state in ["pausedDL", "pausedUP"]:
+        elif state in ["stoppedDL", "stoppedUP"]:
             return MirrorStatus.STATUS_PAUSED
         elif state in ["checkingUP", "checkingDL"]:
-            return MirrorStatus.STATUS_CHECKING
+            return MirrorStatus.STATUS_CHECK
         elif state in ["stalledUP", "uploading"] and self.seeding:
-            return MirrorStatus.STATUS_SEEDING
+            return MirrorStatus.STATUS_SEED
         else:
-            return MirrorStatus.STATUS_DOWNLOADING
+            return MirrorStatus.STATUS_DOWNLOAD
 
     def seeders_num(self):
         return self._info.num_seeds
@@ -99,7 +97,7 @@ class QbittorrentStatus:
         self.listener.is_cancelled = True
         await sync_to_async(self.update)
         await sync_to_async(
-            qbittorrent_client.torrents_pause, torrent_hashes=self._info.hash
+            qbittorrent_client.torrents_stop, torrent_hashes=self._info.hash
         )
         if not self.seeding:
             if self.queued:
@@ -107,7 +105,7 @@ class QbittorrentStatus:
                 msg = "task have been removed from queue/download"
             else:
                 LOGGER.info(f"Cancelling Download: {self._info.name}")
-                msg = "Download stopped by user!"
+                msg = "Stopped by user!"
             await sleep(0.3)
             await gather(
                 self.listener.on_download_error(msg),

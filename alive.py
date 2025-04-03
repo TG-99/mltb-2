@@ -2,8 +2,15 @@ from time import sleep
 from requests import get as rget
 from os import environ
 from logging import error as logerror
+from importlib import import_module
 
-BASE_URL = environ.get('BASE_URL', None)
+settings = import_module("config")
+config_file = {
+    key: value.strip() if isinstance(value, str) else value
+    for key, value in vars(settings).items()
+    if not key.startswith("__")
+}
+BASE_URL = config_file.get("BASE_URL", "")
 try:
     if len(BASE_URL) == 0:
         raise TypeError

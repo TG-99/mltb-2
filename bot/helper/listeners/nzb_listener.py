@@ -1,6 +1,6 @@
 from asyncio import sleep, gather
 
-from bot import (
+from ... import (
     intervals,
     sabnzbd_client,
     nzb_jobs,
@@ -27,38 +27,31 @@ async def _remove_job(nzo_id, mid):
 
 @new_task
 async def _on_download_error(err, nzo_id, button=None):
-    task = await get_task_by_gid(nzo_id)
-    LOGGER.info(f"Cancelling Download: {task.name()}")
-    await gather(
-        task.listener.on_download_error(err, button),
-        _remove_job(nzo_id, task.listener.mid),
-    )
-
-
-@new_task
-async def _change_status(nzo_id, status):
-    task = await get_task_by_gid(nzo_id)
-    async with task_dict_lock:
-        task.cstatus = status
+    if task := await get_task_by_gid(nzo_id):
+        LOGGER.info(f"Cancelling Download: {task.name()}")
+        await gather(
+            task.listener.on_download_error(err, button),
+            _remove_job(nzo_id, task.listener.mid),
+        )
 
 
 @new_task
 async def _stop_duplicate(nzo_id):
-    task = await get_task_by_gid(nzo_id)
-    await task.update()
-    task.listener.name = task.name()
-    msg, button = await stop_duplicate_check(task.listener)
-    if msg:
-        _on_download_error(msg, nzo_id, button)
+    if task := await get_task_by_gid(nzo_id):
+        await task.update()
+        task.listener.name = task.name()
+        msg, button = await stop_duplicate_check(task.listener)
+        if msg:
+            _on_download_error(msg, nzo_id, button)
 
 
 @new_task
 async def _on_download_complete(nzo_id):
-    task = await get_task_by_gid(nzo_id)
-    await task.listener.on_download_complete()
-    if intervals["stopAll"]:
-        return
-    await _remove_job(nzo_id, task.listener.mid)
+    if task := await get_task_by_gid(nzo_id):
+        await task.listener.on_download_complete()
+        if intervals["stopAll"]:
+            return
+        await _remove_job(nzo_id, task.listener.mid)
 
 
 @new_task
@@ -82,19 +75,12 @@ async def _nzb_listener():
                             nzb_jobs[nzo_id]["status"] = "Completed"
                     elif job["status"] == "Failed":
                         await _on_download_error(job["fail_message"], nzo_id)
-                    elif job["status"] in [
-                        "QuickCheck",
-                        "Verifying",
-                        "Repairing",
-                        "Fetching",
-                        "Moving",
-                        "Extracting",
-                    ]:
-                        if job["status"] != nzb_jobs[nzo_id]["status"]:
-                            await _change_status(nzo_id, job["status"])
                 for dl in downloads:
                     nzo_id = dl["nzo_id"]
                     if nzo_id not in nzb_jobs:
+                        continue
+                    if dl["labels"] and dl["labels"][0] == "ALTERNATIVE":
+                        await _on_download_error("Duplicated Job!", nzo_id)
                         continue
                     if (
                         dl["status"] == "Downloading"

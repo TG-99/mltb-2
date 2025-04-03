@@ -5,15 +5,12 @@ from asyncio import sleep, gather
 from html import escape
 from requests import utils as rutils
 
-from bot import (
+from ... import (
     intervals,
     aria2,
-    DOWNLOAD_DIR,
     task_dict,
     task_dict_lock,
     LOGGER,
-    DATABASE_URL,
-    config_dict,
     non_queued_up,
     non_queued_dl,
     queued_up,
@@ -21,6 +18,7 @@ from bot import (
     queue_dict_lock,
     same_directory_lock,
 )
+from ...core.config_manager import Config
 from ..common import TaskConfig
 from ..ext_utils.bot_utils import sync_to_async
 from ..ext_utils.db_handler import database
@@ -62,59 +60,69 @@ class TaskListener(TaskConfig):
         except:
             pass
 
-    def remove_from_same_dir(self):
-        if self.same_dir and self.mid in self.same_dir["tasks"]:
-            self.same_dir["tasks"].remove(self.mid)
-            self.same_dir["total"] -= 1
+    async def remove_from_same_dir(self):
+        async with task_dict_lock:
+            if (
+                self.folder_name
+                and self.same_dir
+                and self.mid in self.same_dir[self.folder_name]["tasks"]
+            ):
+                self.same_dir[self.folder_name]["tasks"].remove(self.mid)
+                self.same_dir[self.folder_name]["total"] -= 1
 
     async def on_download_start(self):
         if (
             self.is_super_chat
-            and config_dict["INCOMPLETE_TASK_NOTIFIER"]
-            and DATABASE_URL
+            and Config.INCOMPLETE_TASK_NOTIFIER
+            and Config.DATABASE_URL
         ):
             await database.add_incomplete_task(
                 self.message.chat.id, self.message.link, self.tag
             )
 
     async def on_download_complete(self):
+        await sleep(2)
         multi_links = False
-        if self.same_dir and self.mid in self.same_dir["tasks"]:
+        if (
+            self.folder_name
+            and self.same_dir
+            and self.mid in self.same_dir[self.folder_name]["tasks"]
+        ):
             async with same_directory_lock:
                 while True:
                     async with task_dict_lock:
-                        if self.mid not in self.same_dir["tasks"]:
+                        if self.mid not in self.same_dir[self.folder_name]["tasks"]:
                             return
-                        if self.mid in self.same_dir["tasks"] and (
-                            self.same_dir["total"] == 1
-                            or len(self.same_dir["tasks"]) > 1
+                        if self.mid in self.same_dir[self.folder_name]["tasks"] and (
+                            self.same_dir[self.folder_name]["total"] <= 1
+                            or len(self.same_dir[self.folder_name]["tasks"]) > 1
                         ):
+                            if self.same_dir[self.folder_name]["total"] > 1:
+                                self.same_dir[self.folder_name]["tasks"].remove(
+                                    self.mid
+                                )
+                                self.same_dir[self.folder_name]["total"] -= 1
+                                spath = f"{self.dir}{self.folder_name}"
+                                des_id = list(self.same_dir[self.folder_name]["tasks"])[
+                                    0
+                                ]
+                                des_path = f"{Config.DOWNLOAD_DIR}{des_id}{self.folder_name}"
+                                await makedirs(des_path, exist_ok=True)
+                                LOGGER.info(f"Moving files from {self.mid} to {des_id}")
+                                for item in await listdir(spath):
+                                    if item.endswith((".aria2", ".!qB")):
+                                        continue
+                                    item_path = f"{self.dir}{self.folder_name}/{item}"
+                                    if item in await listdir(des_path):
+                                        await move(
+                                            item_path, f"{des_path}/{self.mid}-{item}"
+                                        )
+                                    else:
+                                        await move(item_path, f"{des_path}/{item}")
+                                multi_links = True
                             break
                     await sleep(1)
-        await sleep(2) # wait for qbitorrent or any other package to rearrange files and folders like removing !qB
         async with task_dict_lock:
-            if (
-                self.same_dir
-                and self.same_dir["total"] > 1
-                and self.mid in self.same_dir["tasks"]
-            ):
-                self.same_dir["tasks"].remove(self.mid)
-                self.same_dir["total"] -= 1
-                folder_name = self.same_dir["name"]
-                spath = f"{self.dir}{folder_name}"
-                des_path = f"{DOWNLOAD_DIR}{list(self.same_dir["tasks"])[0]}{folder_name}"
-                await makedirs(des_path, exist_ok=True)
-                for item in await listdir(spath):
-                    if item.endswith((".aria2", ".!qB")):
-                        continue
-                    item_path = f"{self.dir}{folder_name}/{item}"
-                    if item in await listdir(des_path):
-                        await move(item_path, f"{des_path}/{self.mid}-{item}")
-                    else:
-                        await move(item_path, f"{des_path}/{item}")
-                multi_links = True
-            elif self.same_dir and self.mid not in self.same_dir["tasks"]:
-                return
             download = task_dict[self.mid]
             self.name = download.name()
             gid = download.gid()
@@ -128,11 +136,13 @@ class TaskListener(TaskConfig):
         files_to_delete = []
 
         if multi_links:
-            await self.on_upload_error(f"{self.name} Downloaded!\n\nWaiting for other tasks to finish...")
+            await self.on_upload_error(
+                f"{self.name} Downloaded!\n\nWaiting for other tasks to finish..."
+            )
             return
 
-        if self.same_dir:
-            self.name = self.same_dir["name"].split("/")[-1]
+        if self.folder_name:
+            self.name = self.folder_name.split("/")[-1]
 
         if not await aiopath.exists(f"{self.dir}/{self.name}"):
             try:
@@ -145,44 +155,74 @@ class TaskListener(TaskConfig):
                 return
 
         up_path = f"{self.dir}/{self.name}"
+        self.is_file = await aiopath.isfile(up_path)
         self.size = await get_path_size(up_path)
-        if not config_dict["QUEUE_ALL"]:
+        if not Config.QUEUE_ALL:
             async with queue_dict_lock:
                 if self.mid in non_queued_dl:
                     non_queued_dl.remove(self.mid)
             await start_from_queued()
 
-        if self.join and await aiopath.isdir(up_path):
+        if self.join and not self.is_file:
             await join_files(up_path)
 
         if self.extract and not self.is_nzb:
             up_path = await self.proceed_extract(up_path, gid)
             if self.is_cancelled:
                 return
+            self.is_file = await aiopath.isfile(up_path)
             up_dir, self.name = up_path.rsplit("/", 1)
             self.size = await get_path_size(up_dir)
+            self.subproc = None
+            self.subname = ""
+            self.subsize = 0
+
+        if self.ffmpeg_cmds:
+            up_path = await self.proceed_ffmpeg(
+                up_path,
+                gid,
+            )
+            if self.is_cancelled:
+                return
+            self.is_file = await aiopath.isfile(up_path)
+            up_dir, self.name = up_path.rsplit("/", 1)
+            self.size = await get_path_size(up_dir)
+            self.subproc = None
+            self.subname = ""
+            self.subsize = 0
 
         if self.name_sub:
             up_path = await self.substitute(up_path)
             if self.is_cancelled:
                 return
+            self.is_file = await aiopath.isfile(up_path)
             self.name = up_path.rsplit("/", 1)[1]
 
         if self.screen_shots:
             up_path = await self.generate_screenshots(up_path)
             if self.is_cancelled:
                 return
+            self.is_file = await aiopath.isfile(up_path)
             up_dir, self.name = up_path.rsplit("/", 1)
             self.size = await get_path_size(up_dir)
+            self.subproc = None
 
         if self.convert_audio or self.convert_video:
             up_path = await self.convert_media(
-                up_path, gid, unwanted_files, unwanted_files_size, files_to_delete
+                up_path,
+                gid,
+                unwanted_files,
+                unwanted_files_size,
+                files_to_delete,
             )
             if self.is_cancelled:
                 return
+            self.is_file = await aiopath.isfile(up_path)
             up_dir, self.name = up_path.rsplit("/", 1)
             self.size = await get_path_size(up_dir)
+            self.subproc = None
+            self.subname = ""
+            self.subsize = 0
 
         if self.sample_video:
             up_path = await self.generate_sample_video(
@@ -190,15 +230,23 @@ class TaskListener(TaskConfig):
             )
             if self.is_cancelled:
                 return
+            self.is_file = await aiopath.isfile(up_path)
             up_dir, self.name = up_path.rsplit("/", 1)
             self.size = await get_path_size(up_dir)
+            self.subproc = None
+            self.subname = ""
+            self.subsize = 0
 
         if self.compress:
             up_path = await self.proceed_compress(
                 up_path, gid, unwanted_files, files_to_delete
             )
+            self.is_file = await aiopath.isfile(up_path)
             if self.is_cancelled:
                 return
+            self.subproc = None
+            self.subname = ""
+            self.subsize = 0
 
         up_dir, self.name = up_path.rsplit("/", 1)
         self.size = await get_path_size(up_dir)
@@ -207,6 +255,9 @@ class TaskListener(TaskConfig):
             await self.proceed_split(up_dir, unwanted_files_size, unwanted_files, gid)
             if self.is_cancelled:
                 return
+            self.subproc = None
+            self.subname = ""
+            self.subsize = 0
 
         add_to_queue, event = await check_running_tasks(self, "up")
         await start_from_queued()
@@ -217,8 +268,6 @@ class TaskListener(TaskConfig):
             await event.wait()
             if self.is_cancelled:
                 return
-            async with queue_dict_lock:
-                non_queued_up.add(self.mid)
             LOGGER.info(f"Start from Queued/Upload: {self.name}")
 
         self.size = await get_path_size(up_dir)
@@ -254,12 +303,12 @@ class TaskListener(TaskConfig):
             )
 
     async def on_upload_complete(
-        self, link, files, folders, mime_type, rclonePath="", dir_id=""
+        self, link, files, folders, mime_type, rclone_path="", dir_id=""
     ):
         if (
             self.is_super_chat
-            and config_dict["INCOMPLETE_TASK_NOTIFIER"]
-            and DATABASE_URL
+            and Config.INCOMPLETE_TASK_NOTIFIER
+            and Config.DATABASE_URL
         ):
             await database.rm_complete_task(self.message.link)
         msg = f"<b>┌ Name: </b><code>{escape(self.name)}</code>\n<b>├ Size: </b>{get_readable_file_size(self.size)}"
@@ -289,32 +338,28 @@ class TaskListener(TaskConfig):
                 msg += f"\n<b>├ Files: </b>{files}"
             if (
                 link
-                or rclonePath
-                and config_dict["RCLONE_SERVE_URL"]
+                or rclone_path
+                and Config.RCLONE_SERVE_URL
                 and not self.private_link
             ):
                 buttons = ButtonMaker()
                 if link:
                     buttons.url_button("☁️ Cloud Link", link)
                 else:
-                    msg += f"\n<b>├ Path: </b><code>{rclonePath}</code>"
-                if (
-                    rclonePath
-                    and (RCLONE_SERVE_URL := config_dict["RCLONE_SERVE_URL"])
-                    and not self.private_link
-                ):
-                    remote, path = rclonePath.split(":", 1)
+                    msg += f"\n<b>├ Path: </b><code>{rclone_path}</code>"
+                if rclone_path and Config.RCLONE_SERVE_URL and not self.private_link:
+                    remote, path = rclone_path.split(":", 1)
                     url_path = rutils.quote(f"{path}")
-                    share_url = f"{RCLONE_SERVE_URL}/{remote}/{url_path}"
+                    share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
                     if mime_type == "Folder":
                         share_url += "/"
                     buttons.url_button("🔗 Rclone Link", share_url)
-                if not rclonePath and dir_id:
+                if not rclone_path and dir_id:
                     INDEX_URL = ""
                     if self.private_link:
                         INDEX_URL = self.user_dict.get("index_url", "") or ""
-                    elif config_dict["INDEX_URL"]:
-                        INDEX_URL = config_dict["INDEX_URL"]
+                    elif Config.INDEX_URL:
+                        INDEX_URL = Config.INDEX_URL
                     if INDEX_URL:
                         share_url = f"{INDEX_URL}findpath?id={dir_id}"
                         buttons.url_button("⚡ Index Link", share_url)
@@ -323,7 +368,7 @@ class TaskListener(TaskConfig):
                             buttons.url_button("🌐 View Link", share_urls)
                 button = buttons.build_menu(2)
             else:
-                msg += f"\n├ Path: <code>{rclonePath}</code>"
+                msg += f"\n├ Path: <code>{rclone_path}</code>"
                 button = None
             msg += f"\n<b>└ cc: </b>{self.tag}"
             await send_message(self.message, msg, button)
@@ -356,8 +401,8 @@ class TaskListener(TaskConfig):
             if self.mid in task_dict:
                 del task_dict[self.mid]
             count = len(task_dict)
-            self.remove_from_same_dir()
-        msg = f"{self.tag} Download: {escape(error)}"
+        await self.remove_from_same_dir()
+        msg = f"{self.tag} Download: {escape(str(error))}"
         await send_message(self.message, msg, button)
         if count == 0:
             await self.clean()
@@ -366,8 +411,8 @@ class TaskListener(TaskConfig):
 
         if (
             self.is_super_chat
-            and config_dict["INCOMPLETE_TASK_NOTIFIER"]
-            and DATABASE_URL
+            and Config.INCOMPLETE_TASK_NOTIFIER
+            and Config.DATABASE_URL
         ):
             await database.rm_complete_task(self.message.link)
 
@@ -396,7 +441,7 @@ class TaskListener(TaskConfig):
             if self.mid in task_dict:
                 del task_dict[self.mid]
             count = len(task_dict)
-        await send_message(self.message, f"{self.tag} {escape(error)}")
+        await send_message(self.message, f"{self.tag} {escape(str(error))}")
         if count == 0:
             await self.clean()
         else:
@@ -404,8 +449,8 @@ class TaskListener(TaskConfig):
 
         if (
             self.is_super_chat
-            and config_dict["INCOMPLETE_TASK_NOTIFIER"]
-            and DATABASE_URL
+            and Config.INCOMPLETE_TASK_NOTIFIER
+            and Config.DATABASE_URL
         ):
             await database.rm_complete_task(self.message.link)
 

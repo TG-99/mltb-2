@@ -1,12 +1,13 @@
 from httpx import AsyncClient
 from asyncio import wait_for, Event
 from functools import partial
-from pyrogram.filters import command, regex, user
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler
+from pyrogram.filters import regex, user
+from pyrogram.handlers import CallbackQueryHandler
 from time import time
 from yt_dlp import YoutubeDL
 
-from bot import DOWNLOAD_DIR, bot, config_dict, LOGGER, bot_loop
+from .. import LOGGER, bot_loop, task_dict_lock
+from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import (
     new_task,
     sync_to_async,
@@ -17,9 +18,7 @@ from ..helper.ext_utils.links_utils import is_url
 from ..helper.ext_utils.status_utils import get_readable_file_size, get_readable_time
 from ..helper.listeners.task_listener import TaskListener
 from ..helper.mirror_leech_utils.download_utils.yt_dlp_download import YoutubeDLHelper
-from ..helper.telegram_helper.bot_commands import BotCommands
 from ..helper.telegram_helper.button_build import ButtonMaker
-from ..helper.telegram_helper.filters import CustomFilters
 from ..helper.telegram_helper.message_utils import (
     send_message,
     edit_message,
@@ -311,6 +310,7 @@ class YtDlp(TaskListener):
             "-cv": "",
             "-ns": "",
             "-tl": "",
+            "-ff": set(),
         }
 
         arg_parser(input_list[1:], args)
@@ -319,6 +319,16 @@ class YtDlp(TaskListener):
             self.multi = int(args["-i"])
         except:
             self.multi = 0
+
+        try:
+            if args["-ff"]:
+                if isinstance(args["-ff"], set):
+                    self.ffmpeg_cmds = args["-ff"]
+                else:
+                    self.ffmpeg_cmds = eval(args["-ff"])
+        except Exception as e:
+            self.ffmpeg_cmds = None
+            LOGGER.error(e)
 
         self.select = args["-s"]
         self.name = args["-n"]
@@ -340,9 +350,9 @@ class YtDlp(TaskListener):
         self.thumbnail_layout = args["-tl"]
         self.as_doc = args["-doc"]
         self.as_med = args["-med"]
+        self.folder_name = f"/{args["-m"]}" if len(args["-m"]) > 0 else ""
 
         is_bulk = args["-b"]
-        folder_name = args["-m"]
 
         bulk_start = 0
         bulk_end = 0
@@ -357,17 +367,33 @@ class YtDlp(TaskListener):
             is_bulk = True
 
         if not is_bulk:
-            if folder_name:
-                folder_name = f"/{folder_name}"
-                if not self.same_dir:
-                    self.same_dir = {
-                        "total": self.multi,
-                        "tasks": set(),
-                        "name": folder_name,
-                    }
-                self.same_dir["tasks"].add(self.mid)
-            elif self.same_dir:
-                self.same_dir["total"] -= 1
+            if self.multi > 0:
+                if self.folder_name:
+                    async with task_dict_lock:
+                        if self.folder_name in self.same_dir:
+                            self.same_dir[self.folder_name]["tasks"].add(self.mid)
+                            for fd_name in self.same_dir:
+                                if fd_name != self.folder_name:
+                                    self.same_dir[fd_name]["total"] -= 1
+                        elif self.same_dir:
+                            self.same_dir[self.folder_name] = {
+                                "total": self.multi,
+                                "tasks": {self.mid},
+                            }
+                            for fd_name in self.same_dir:
+                                if fd_name != self.folder_name:
+                                    self.same_dir[fd_name]["total"] -= 1
+                        else:
+                            self.same_dir = {
+                                self.folder_name: {
+                                    "total": self.multi,
+                                    "tasks": {self.mid},
+                                }
+                            }
+                elif self.same_dir:
+                    async with task_dict_lock:
+                        for fd_name in self.same_dir:
+                            self.same_dir[fd_name]["total"] -= 1
         else:
             await self.init_bulk(input_list, bulk_start, bulk_end, YtDlp)
             return
@@ -375,11 +401,11 @@ class YtDlp(TaskListener):
         if len(self.bulk) != 0:
             del self.bulk[0]
 
-        path = f"{DOWNLOAD_DIR}{self.mid}{folder_name}"
+        path = f"{Config.DOWNLOAD_DIR}{self.mid}{self.folder_name}"
 
         await self.get_tag(text)
 
-        opt = opt or self.user_dict.get("yt_opt") or config_dict["YT_DLP_OPTIONS"]
+        opt = opt or self.user_dict.get("yt_opt") or Config.YT_DLP_OPTIONS
 
         if not self.link and (reply_to := self.message.reply_to_message):
             self.link = reply_to.text.split("\n", 1)[0].strip()
@@ -388,7 +414,7 @@ class YtDlp(TaskListener):
             await send_message(
                 self.message, COMMAND_USAGE["yt"][0], COMMAND_USAGE["yt"][1]
             )
-            self.remove_from_same_dir()
+            await self.remove_from_same_dir()
             return
 
         if "mdisk.me" in self.link:
@@ -398,7 +424,7 @@ class YtDlp(TaskListener):
             await self.before_start()
         except Exception as e:
             await send_message(self.message, e)
-            self.remove_from_same_dir()
+            await self.remove_from_same_dir()
             return
 
         options = {"usenetrc": True, "cookiefile": "cookies.txt"}
@@ -435,15 +461,15 @@ class YtDlp(TaskListener):
         except Exception as e:
             msg = str(e).replace("<", " ").replace(">", " ")
             await send_message(self.message, f"{self.tag} {msg}")
-            self.remove_from_same_dir()
+            await self.remove_from_same_dir()
             return
         finally:
-            await self.run_multi(input_list, folder_name, YtDlp)
+            await self.run_multi(input_list, YtDlp)
 
         if not qual:
             qual = await YtSelection(self).get_quality(result)
             if qual is None:
-                self.remove_from_same_dir()
+                await self.remove_from_same_dir()
                 return
 
         LOGGER.info(f"Downloading with YT-DLP: {self.link}")
@@ -458,19 +484,3 @@ async def ytdl(client, message):
 
 async def ytdl_leech(client, message):
     bot_loop.create_task(YtDlp(client, message, is_leech=True).new_event())
-
-
-bot.add_handler(
-    MessageHandler(
-        ytdl,
-        filters=command(BotCommands.YtdlCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        ytdl_leech,
-        filters=command(BotCommands.YtdlLeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)

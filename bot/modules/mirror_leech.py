@@ -1,10 +1,9 @@
-from aiofiles.os import path as aiopath, remove
+from aiofiles.os import path as aiopath
 from base64 import b64encode
-from pyrogram.filters import command
-from pyrogram.handlers import MessageHandler
 from re import match as re_match
 
-from bot import bot, DOWNLOAD_DIR, LOGGER, bot_loop
+from .. import LOGGER, bot_loop, task_dict_lock
+from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import (
     get_content_type,
     sync_to_async,
@@ -41,10 +40,7 @@ from ..helper.mirror_leech_utils.download_utils.rclone_download import (
 from ..helper.mirror_leech_utils.download_utils.telegram_download import (
     TelegramDownloadHelper,
 )
-from ..helper.telegram_helper.bot_commands import BotCommands
-from ..helper.telegram_helper.filters import CustomFilters
 from ..helper.telegram_helper.message_utils import send_message, get_tg_link_message
-from myjd.exception import MYJDException
 from ..helper.mirror_leech_utils.download_utils.mega_download import add_mega_download
 
 
@@ -112,6 +108,7 @@ class Mirror(TaskListener):
             "-cv": "",
             "-ns": "",
             "-tl": "",
+            "-ff": set(),
         }
 
         arg_parser(input_list[1:], args)
@@ -139,10 +136,10 @@ class Mirror(TaskListener):
         self.thumbnail_layout = args["-tl"]
         self.as_doc = args["-doc"]
         self.as_med = args["-med"]
+        self.folder_name = f"/{args["-m"]}" if len(args["-m"]) > 0 else ""
 
         headers = args["-h"]
         is_bulk = args["-b"]
-        folder_name = args["-m"]
 
         bulk_start = 0
         bulk_end = 0
@@ -156,6 +153,16 @@ class Mirror(TaskListener):
             self.multi = int(args["-i"])
         except:
             self.multi = 0
+
+        try:
+            if args["-ff"]:
+                if isinstance(args["-ff"], set):
+                    self.ffmpeg_cmds = args["-ff"]
+                else:
+                    self.ffmpeg_cmds = eval(args["-ff"])
+        except Exception as e:
+            self.ffmpeg_cmds = None
+            LOGGER.error(e)
 
         if not isinstance(self.seed, bool):
             dargs = self.seed.split(":")
@@ -172,21 +179,36 @@ class Mirror(TaskListener):
             is_bulk = True
 
         if not is_bulk:
-            if folder_name:
-                self.seed = False
-                ratio = None
-                seed_time = None
-                folder_name = f"/{folder_name}"
-                if not self.same_dir:
-                    self.same_dir = {
-                        "total": self.multi,
-                        "tasks": set(),
-                        "name": folder_name,
-                    }
-                self.same_dir["tasks"].add(self.mid)
-            elif self.same_dir:
-                self.same_dir["total"] -= 1
-
+            if self.multi > 0:
+                if self.folder_name:
+                    self.seed = False
+                    ratio = None
+                    seed_time = None
+                    async with task_dict_lock:
+                        if self.folder_name in self.same_dir:
+                            self.same_dir[self.folder_name]["tasks"].add(self.mid)
+                            for fd_name in self.same_dir:
+                                if fd_name != self.folder_name:
+                                    self.same_dir[fd_name]["total"] -= 1
+                        elif self.same_dir:
+                            self.same_dir[self.folder_name] = {
+                                "total": self.multi,
+                                "tasks": {self.mid},
+                            }
+                            for fd_name in self.same_dir:
+                                if fd_name != self.folder_name:
+                                    self.same_dir[fd_name]["total"] -= 1
+                        else:
+                            self.same_dir = {
+                                self.folder_name: {
+                                    "total": self.multi,
+                                    "tasks": {self.mid},
+                                }
+                            }
+                elif self.same_dir:
+                    async with task_dict_lock:
+                        for fd_name in self.same_dir:
+                            self.same_dir[fd_name]["total"] -= 1
         else:
             await self.init_bulk(input_list, bulk_start, bulk_end, Mirror)
             return
@@ -194,11 +216,11 @@ class Mirror(TaskListener):
         if len(self.bulk) != 0:
             del self.bulk[0]
 
-        await self.run_multi(input_list, folder_name, Mirror)
+        await self.run_multi(input_list, Mirror)
 
         await self.get_tag(text)
 
-        path = f"{DOWNLOAD_DIR}{self.mid}{folder_name}"
+        path = f"{Config.DOWNLOAD_DIR}{self.mid}{self.folder_name}"
 
         if not self.link and (reply_to := self.message.reply_to_message):
             if reply_to.text:
@@ -208,12 +230,11 @@ class Mirror(TaskListener):
                 reply_to, session = await get_tg_link_message(self.link)
             except Exception as e:
                 await send_message(self.message, f"ERROR: {e}")
-                self.remove_from_same_dir()
+                await self.remove_from_same_dir()
                 return
 
         if isinstance(reply_to, list):
             self.bulk = reply_to
-            self.same_dir = {}
             b_msg = input_list[:1]
             self.options = " ".join(input_list[1:])
             b_msg.append(f"{self.bulk[0]} -i {len(self.bulk)} {self.options}")
@@ -281,7 +302,7 @@ class Mirror(TaskListener):
             await send_message(
                 self.message, COMMAND_USAGE["mirror"][0], COMMAND_USAGE["mirror"][1]
             )
-            self.remove_from_same_dir()
+            await self.remove_from_same_dir()
             return
 
         if len(self.link) > 0:
@@ -291,7 +312,7 @@ class Mirror(TaskListener):
             await self.before_start()
         except Exception as e:
             await send_message(self.message, e)
-            self.remove_from_same_dir()
+            await self.remove_from_same_dir()
             return
 
         if (
@@ -320,7 +341,7 @@ class Mirror(TaskListener):
                         LOGGER.info(e)
                     if e.startswith("ERROR:"):
                         await send_message(self.message, e)
-                        self.remove_from_same_dir()
+                        await self.remove_from_same_dir()
                         return
 
         if file_ is not None:
@@ -330,15 +351,7 @@ class Mirror(TaskListener):
         elif isinstance(self.link, dict):
             await add_direct_download(self, path)
         elif self.is_jd:
-            try:
-                await add_jd_download(self, path)
-            except (Exception, MYJDException) as e:
-                await send_message(self.message, f"{e}".strip())
-                self.remove_from_same_dir()
-                return
-            finally:
-                if await aiopath.exists(self.link):
-                    await remove(self.link)
+            await add_jd_download(self, path)
         elif self.is_qbit:
             await add_qb_torrent(self, path, ratio, seed_time)
         elif self.is_nzb:
@@ -397,61 +410,3 @@ async def nzb_leech(client, message):
     bot_loop.create_task(
         Mirror(client, message, is_leech=True, is_nzb=True).new_event()
     )
-
-
-bot.add_handler(
-    MessageHandler(
-        mirror,
-        filters=command(BotCommands.MirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        qb_mirror,
-        filters=command(BotCommands.QbMirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        jd_mirror,
-        filters=command(BotCommands.JdMirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        nzb_mirror,
-        filters=command(BotCommands.NzbMirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        leech,
-        filters=command(BotCommands.LeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        qb_leech,
-        filters=command(BotCommands.QbLeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        jd_leech,
-        filters=command(BotCommands.JdLeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        nzb_leech,
-        filters=command(BotCommands.NzbLeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)

@@ -1,17 +1,14 @@
 from psutil import cpu_percent, virtual_memory, disk_usage
-from pyrogram.filters import command, regex
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from time import time
 
-from bot import (
+from .. import (
     task_dict_lock,
     status_dict,
     task_dict,
-    botStartTime,
-    DOWNLOAD_DIR,
+    bot_start_time,
     intervals,
-    bot,
 )
+from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import sync_to_async, new_task
 from ..helper.ext_utils.status_utils import (
     MirrorStatus,
@@ -20,7 +17,6 @@ from ..helper.ext_utils.status_utils import (
     speed_string_to_bytes,
 )
 from ..helper.telegram_helper.bot_commands import BotCommands
-from ..helper.telegram_helper.filters import CustomFilters
 from ..helper.telegram_helper.message_utils import (
     send_message,
     delete_message,
@@ -33,12 +29,12 @@ from ..helper.telegram_helper.button_build import ButtonMaker
 
 
 @new_task
-async def mirror_status(_, message):
+async def task_status(_, message):
     async with task_dict_lock:
         count = len(task_dict)
     if count == 0:
-        currentTime = get_readable_time(time() - botStartTime)
-        free = get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)
+        currentTime = get_readable_time(time() - bot_start_time)
+        free = get_readable_file_size(disk_usage(Config.DOWNLOAD_DIR).free)
         msg = f"No Active Tasks!\nEach user can get status for his tasks by adding me or user_id after cmd: /{BotCommands.StatusCommand} me"
         msg += (
             f"\n<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {free}"
@@ -99,6 +95,7 @@ async def status_pages(_, query):
             "Pause": 0,
             "SamVid": 0,
             "ConvertMedia": 0,
+            "FFmpeg": 0,
         }
         dl_speed = 0
         up_speed = 0
@@ -106,35 +103,37 @@ async def status_pages(_, query):
         async with task_dict_lock:
             for download in task_dict.values():
                 match await sync_to_async(download.status):
-                    case MirrorStatus.STATUS_DOWNLOADING:
+                    case MirrorStatus.STATUS_DOWNLOAD:
                         tasks["Download"] += 1
                         dl_speed += speed_string_to_bytes(download.speed())
-                    case MirrorStatus.STATUS_UPLOADING:
+                    case MirrorStatus.STATUS_UPLOAD:
                         tasks["Upload"] += 1
                         up_speed += speed_string_to_bytes(download.speed())
-                    case MirrorStatus.STATUS_SEEDING:
+                    case MirrorStatus.STATUS_SEED:
                         tasks["Seed"] += 1
                         seed_speed += speed_string_to_bytes(download.seed_speed())
-                    case MirrorStatus.STATUS_ARCHIVING:
+                    case MirrorStatus.STATUS_ARCHIVE:
                         tasks["Archive"] += 1
-                    case MirrorStatus.STATUS_EXTRACTING:
+                    case MirrorStatus.STATUS_EXTRACT:
                         tasks["Extract"] += 1
-                    case MirrorStatus.STATUS_SPLITTING:
+                    case MirrorStatus.STATUS_SPLIT:
                         tasks["Split"] += 1
                     case MirrorStatus.STATUS_QUEUEDL:
                         tasks["QueueDl"] += 1
                     case MirrorStatus.STATUS_QUEUEUP:
                         tasks["QueueUp"] += 1
-                    case MirrorStatus.STATUS_CLONING:
+                    case MirrorStatus.STATUS_CLONE:
                         tasks["Clone"] += 1
-                    case MirrorStatus.STATUS_CHECKING:
+                    case MirrorStatus.STATUS_CHECK:
                         tasks["CheckUp"] += 1
                     case MirrorStatus.STATUS_PAUSED:
                         tasks["Pause"] += 1
                     case MirrorStatus.STATUS_SAMVID:
                         tasks["SamVid"] += 1
-                    case MirrorStatus.STATUS_CONVERTING:
+                    case MirrorStatus.STATUS_CONVERT:
                         tasks["ConvertMedia"] += 1
+                    case MirrorStatus.STATUS_FFMPEG:
+                        tasks["FFMPEG"] += 1
                     case _:
                         tasks["Download"] += 1
                         dl_speed += speed_string_to_bytes(download.speed())
@@ -142,7 +141,7 @@ async def status_pages(_, query):
         msg = f"""<b>DL:</b> {tasks['Download']} | <b>UP:</b> {tasks['Upload']} | <b>SD:</b> {tasks['Seed']} | <b>AR:</b> {tasks['Archive']}
 <b>EX:</b> {tasks['Extract']} | <b>SP:</b> {tasks['Split']} | <b>QD:</b> {tasks['QueueDl']} | <b>QU:</b> {tasks['QueueUp']}
 <b>CL:</b> {tasks['Clone']} | <b>CK:</b> {tasks['CheckUp']} | <b>PA:</b> {tasks['Pause']} | <b>SV:</b> {tasks['SamVid']}
-<b>CM:</b> {tasks['ConvertMedia']}
+<b>CM:</b> {tasks['ConvertMedia']} | <b>FF:</b> {tasks['FFmpeg']}
 
 <b>ODLS:</b> {get_readable_file_size(dl_speed)}/s
 <b>OULS:</b> {get_readable_file_size(up_speed)}/s
@@ -151,13 +150,3 @@ async def status_pages(_, query):
         button = ButtonMaker()
         button.data_button("Back", f"status {data[1]} ref")
         await edit_message(message, msg, button.build_menu())
-
-
-bot.add_handler(
-    MessageHandler(
-        mirror_status,
-        filters=command(BotCommands.StatusCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(CallbackQueryHandler(status_pages, filters=regex("^status")))

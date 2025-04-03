@@ -1,3 +1,5 @@
+from ..telegram_helper.bot_commands import BotCommands
+
 mirror = """<b>Send link along with command line or </b>
 
 /cmd link
@@ -30,14 +32,31 @@ multi_link = """<b>Multi links only by replying to first link/file</b>: -i
 
 /cmd -i 10(number of links/files)"""
 
-same_dir = """<b>Multi links within same upload directory only by replying to first link/file</b>: -m
+same_dir = """<b>Move file(s)/folder(s) to new folder</b>: -m
 
-/cmd -i 10(number of links/files) -m folder name (multi message)
-/cmd -b -m folder name (bulk-message/file)"""
+You can use this arg also to move multiple links/torrents contents to the same directory, so all links will be uploaded together as one task
+
+/cmd link -m new folder (only one link inside new folder)
+/cmd -i 10(number of links/files) -m folder name (all links contents in one folder)
+/cmd -b -m folder name (reply to batch of message/file(each link on new line))
+
+While using bulk you can also use this arg with different folder name along with the links in message or file batch
+Example:
+link1 -m folder1
+link2 -m folder1
+link3 -m folder2
+link4 -m folder2
+link5 -m folder3
+link6
+so link1 and link2 content will be uploaded from same folder which is folder1
+link3 and link4 content will be uploaded from same folder also which is folder2
+link5 will uploaded alone inside new folder named folder3
+link6 will get uploaded normally alone
+"""
 
 thumb = """<b>Thumbnail for current task</b>: -t
 
-/cmd link -t tg-message-link(doc or photo)"""
+/cmd link -t tg-message-link (doc or photo) or none (file without thumb)"""
 
 split_size = """<b>Split size for current task</b>: -sp
 
@@ -52,7 +71,7 @@ If DEFAULT_UPLOAD is `rc` then you can pass up: `gd` to upload using gdrive tool
 If DEFAULT_UPLOAD is `gd` then you can pass up: `rc` to upload to RCLONE_PATH.
 
 If you want to add path or gdrive manually from your config/token (UPLOADED FROM USETTING) add mrcc: for rclone and mtp: before the path/gdrive_id without space.
-/cmd link -up mrcc:main:dump or -up mtp:gdrive_id
+/cmd link -up mrcc:main:dump or -up mtp:gdrive_id <strong>or you can simply edit upload using owner/user token/config from usetting without adding mtp: or mrcc: before the upload path/id</strong>
 
 To add leech destination:
 -up id
@@ -84,13 +103,16 @@ Check here all <a href='https://rclone.org/flags/'>RcloneFlags</a>."""
 
 bulk = """<b>Bulk Download</b>: -b
 
-Bulk can be used by text message and by replying to text file contains links separated by new line.
-You can use it only by reply to message(text/file).
+Bulk can be used only by replying to text message or text file contains links separated by new line.
 Example:
 link1 -n new name -up remote1:path1 -rcf |key:value|key:value
 link2 -z -n new name -up remote2:path2
 link3 -e -n new name -up remote2:path2
-Reply to this example by this cmd -> /cmd -b(bulk) or /cmd -b -m folder name
+Reply to this example by this cmd -> /cmd -b(bulk)
+
+Note: Any arg along with the cmd will be setted to all links
+/cmd -b -up remote: -z -m folder name (all links contents in one zipped folder uploaded to one destination)
+so you can't set different upload destinations along with link incase you have added -m along with cmd
 You can set start and end of the links from the bulk like seed, with -b start:end or only end by -b :end or only start by -b start.
 The default start is from zero(first link) to inf."""
 
@@ -187,8 +209,8 @@ If DEFAULT_UPLOAD is `rc` then you can pass up: `gd` to upload using gdrive tool
 rclone_cl = """<b>Rclone</b>: path
 If DEFAULT_UPLOAD is `gd` then you can pass up: `rc` to upload to RCLONE_PATH.
 /cmd rcl/rclone_path -up rcl/rclone_path/rc -rcf flagkey:flagvalue|flagkey|flagkey:flagvalue
-/cmd rcl or rclonePath -up rclonePath or rc or rcl
-/cmd mrcc:rclonePath -up rcl or rc(if you have add rclone path from usetting) (to use user config)"""
+/cmd rcl or rclone_path -up rclone_path or rc or rcl
+/cmd mrcc:rclone_path -up rcl or rc(if you have add rclone path from usetting) (to use user config)"""
 
 name_sub = r"""<b>Name Substitution</b>: -ns
 /cmd link -ns script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb | \\text\\/text/s
@@ -204,7 +226,7 @@ NOTE: You must add \ before any character, those are the characters: \^$.|?*+()[
 8. \text\ will get replaced by text with sensitive case
 """
 
-mixed_leech = """Mixed leech: -ml
+mixed_leech = """<b>Mixed leech</b>: -ml
 /cmd link -ml (leech by user and bot session with respect to size)"""
 
 thumbnail_layout = """Thumbnail Layout: -tl
@@ -213,6 +235,19 @@ thumbnail_layout = """Thumbnail Layout: -tl
 leech_as = """<b>Leech as</b>: -doc -med
 /cmd link -doc (Leech as document)
 /cmd link -med (Leech as media)"""
+
+ffmpeg_cmds = """<b>FFmpeg Commands</b>: -ff
+list of lists of ffmpeg commands. You can set multiple ffmpeg commands for all files before upload. Don't write ffmpeg at beginning, start directly with the arguments.
+Notes:
+1. Add <code>-del</code> to the list(s) which you want from the bot to delete the original files after command run complete!
+2. Seed will get disbaled while using this option
+3. To execute one of pre-added lists in bot like: ({"subtitle": ["-i mltb.mkv -c copy -c:s srt mltb.mkv"]}), you must use -ff subtitle (list key)
+Examples: ["-i mltb.mkv -c copy -c:s srt mltb.mkv", "-i mltb.video -c copy -c:s srt mltb", "-i mltb.m4a -c:a libmp3lame -q:a 2 mltb.mp3", "-i mltb.audio -c:a libmp3lame -q:a 2 mltb.mp3"]
+Here I will explain how to use mltb.* which is reference to files you want to work on.
+1. First cmd: the input is mltb.mkv so this cmd will work only on mkv videos and the output is mltb.mkv also so all outputs is mkv. -del will delete the original media after complete run of the cmd.
+2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extenstion is same as input files.
+3. Third cmd: the input in mltb.m4a so this cmd will work only on m4a audios and the output is mltb.mp3 so the output extension is mp3.
+4. Fourth cmd: the input is mltb.audio so this cmd will work on all audios and the output is mltb.mp3 so the output extension is mp3."""
 
 YT_HELP_DICT = {
     "main": yt,
@@ -235,6 +270,7 @@ YT_HELP_DICT = {
     "Mixed-Leech": mixed_leech,
     "Thumbnail-Layout": thumbnail_layout,
     "Leech-Type": leech_as,
+    "FFmpeg-Cmds": ffmpeg_cmds,
 }
 
 MIRROR_HELP_DICT = {
@@ -264,6 +300,7 @@ MIRROR_HELP_DICT = {
     "Mixed-Leech": mixed_leech,
     "Thumbnail-Layout": thumbnail_layout,
     "Leech-Type": leech_as,
+    "FFmpeg-Cmds": ffmpeg_cmds,
 }
 
 CLONE_HELP_DICT = {
@@ -303,4 +340,46 @@ PASSWORD_ERROR_MESSAGE = """
 - Insert <b>::</b> after the link and write the password after the sign.
 
 <b>Example:</b> link::my password
+"""
+
+
+help_string = f"""
+NOTE: Try each command without any argument to see more detalis.
+/{BotCommands.MirrorCommand[0]} or /{BotCommands.MirrorCommand[1]}: Start mirroring to cloud.
+/{BotCommands.QbMirrorCommand[0]} or /{BotCommands.QbMirrorCommand[1]}: Start Mirroring to cloud using qBittorrent.
+/{BotCommands.JdMirrorCommand[0]} or /{BotCommands.JdMirrorCommand[1]}: Start Mirroring to cloud using JDownloader.
+/{BotCommands.NzbMirrorCommand[0]} or /{BotCommands.NzbMirrorCommand[1]}: Start Mirroring to cloud using Sabnzbd.
+/{BotCommands.YtdlCommand[0]} or /{BotCommands.YtdlCommand[1]}: Mirror yt-dlp supported link.
+/{BotCommands.LeechCommand[0]} or /{BotCommands.LeechCommand[1]}: Start leeching to Telegram.
+/{BotCommands.QbLeechCommand[0]} or /{BotCommands.QbLeechCommand[1]}: Start leeching using qBittorrent.
+/{BotCommands.JdLeechCommand[0]} or /{BotCommands.JdLeechCommand[1]}: Start leeching using JDownloader.
+/{BotCommands.NzbLeechCommand[0]} or /{BotCommands.NzbLeechCommand[1]}: Start leeching using Sabnzbd.
+/{BotCommands.YtdlLeechCommand[0]} or /{BotCommands.YtdlLeechCommand[1]}: Leech yt-dlp supported link.
+/{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
+/{BotCommands.CountCommand} [drive_url]: Count file/folder of Google Drive.
+/{BotCommands.DeleteCommand} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo).
+/{BotCommands.UserSetCommand[0]} or /{BotCommands.UserSetCommand[1]} [query]: Users settings.
+/{BotCommands.BotSetCommand[0]} or /{BotCommands.BotSetCommand[1]} [query]: Bot settings.
+/{BotCommands.SelectCommand}: Select files from torrents or nzb by gid or reply.
+/{BotCommands.CancelTaskCommand[0]} or /{BotCommands.CancelTaskCommand[1]} [gid]: Cancel task by gid or reply.
+/{BotCommands.ForceStartCommand[0]} or /{BotCommands.ForceStartCommand[1]} [gid]: Force start task by gid or reply.
+/{BotCommands.CancelAllCommand} [query]: Cancel all [status] tasks.
+/{BotCommands.ListCommand} [query]: Search in Google Drive(s).
+/{BotCommands.SearchCommand} [query]: Search for torrents with API.
+/{BotCommands.StatusCommand}: Shows a status of all the downloads.
+/{BotCommands.StatsCommand}: Show stats of the machine where the bot is hosted in.
+/{BotCommands.PingCommand}: Check how long it takes to Ping the Bot (Only Owner & Sudo).
+/{BotCommands.AuthorizeCommand}: Authorize a chat or a user to use the bot (Only Owner & Sudo).
+/{BotCommands.UnAuthorizeCommand}: Unauthorize a chat or a user to use the bot (Only Owner & Sudo).
+/{BotCommands.UsersCommand}: show users settings (Only Owner & Sudo).
+/{BotCommands.AddSudoCommand}: Add sudo user (Only Owner).
+/{BotCommands.RmSudoCommand}: Remove sudo users (Only Owner).
+/{BotCommands.RestartCommand}: Restart and update the bot (Only Owner & Sudo).
+/{BotCommands.LogCommand}: Get a log file of the bot. Handy for getting crash reports (Only Owner & Sudo).
+/{BotCommands.ShellCommand}: Run shell commands (Only Owner).
+/{BotCommands.AExecCommand}: Exec async functions (Only Owner).
+/{BotCommands.ExecCommand}: Exec sync functions (Only Owner).
+/{BotCommands.ClearLocalsCommand}: Clear {BotCommands.AExecCommand} or {BotCommands.ExecCommand} locals (Only Owner).
+/{BotCommands.RssCommand}: RSS Menu.
+/{BotCommands.CleanDBCommand}:Clean Database.
 """

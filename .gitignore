@@ -1,4 +1,5 @@
-config.env
+mltbenv/*
+config.py
 *.pyc
 data*
 .vscode

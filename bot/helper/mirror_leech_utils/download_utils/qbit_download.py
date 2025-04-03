@@ -1,15 +1,13 @@
 from aiofiles.os import remove, path as aiopath
 from asyncio import sleep
 
-from bot import (
+from .... import (
     task_dict,
     task_dict_lock,
     qbittorrent_client,
     LOGGER,
-    config_dict,
-    non_queued_dl,
-    queue_dict_lock,
 )
+from ....core.config_manager import Config
 from ...ext_utils.bot_utils import bt_selection_buttons, sync_to_async
 from ...ext_utils.task_manager import check_running_tasks
 from ...listeners.qbit_listener import on_download_start
@@ -56,7 +54,6 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
             tags=f"{listener.mid}",
             ratio_limit=ratio,
             seeding_time_limit=seed_time,
-            headers={"user-agent": "Wget/1.12"},
         )
         if op.lower() == "ok.":
             tor_info = await sync_to_async(
@@ -64,6 +61,8 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
             )
             if len(tor_info) == 0:
                 while True:
+                    if add_to_queue and event.is_set():
+                        add_to_queue = False
                     tor_info = await sync_to_async(
                         qbittorrent_client.torrents_info, tag=f"{listener.mid}"
                     )
@@ -90,7 +89,7 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
 
         await listener.on_download_start()
 
-        if config_dict["BASE_URL"] and listener.select:
+        if Config.BASE_URL and listener.select:
             if listener.link.startswith("magnet:"):
                 metamsg = "Downloading Metadata, wait then you can select files. Use torrent file to avoid this wait."
                 meta = await send_message(listener.message, metamsg)
@@ -106,7 +105,7 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
                         if tor_info.state not in [
                             "metaDL",
                             "checkingResumeData",
-                            "pausedDL",
+                            "stoppedDL",
                         ]:
                             await delete_message(meta)
                             break
@@ -117,7 +116,7 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
             ext_hash = tor_info.hash
             if not add_to_queue:
                 await sync_to_async(
-                    qbittorrent_client.torrents_pause, torrent_hashes=ext_hash
+                    qbittorrent_client.torrents_stop, torrent_hashes=ext_hash
                 )
             SBUTTONS = bt_selection_buttons(ext_hash)
             msg = "Your download paused. Choose files then press Done Selecting button to start downloading."
@@ -125,21 +124,21 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
         elif listener.multi <= 1:
             await send_status_message(listener.message)
 
-        if add_to_queue:
-            await event.wait()
-            if listener.is_cancelled:
-                return
-            async with queue_dict_lock:
-                non_queued_dl.add(listener.mid)
-            async with task_dict_lock:
-                task_dict[listener.mid].queued = False
-
+        if event is not None:
+            if not event.is_set():
+                await event.wait()
+                if listener.is_cancelled:
+                    return
+                async with task_dict_lock:
+                    task_dict[listener.mid].queued = False
+                LOGGER.info(
+                    f"Start Queued Download from Qbittorrent: {tor_info.name} - Hash: {ext_hash}"
+                )
+            await on_download_start(f"{listener.mid}")
             await sync_to_async(
-                qbittorrent_client.torrents_resume, torrent_hashes=ext_hash
+                qbittorrent_client.torrents_start, torrent_hashes=ext_hash
             )
-            LOGGER.info(
-                f"Start Queued Download from Qbittorrent: {tor_info.name} - Hash: {ext_hash}"
-            )
+
     except Exception as e:
         await listener.on_download_error(f"{e}")
     finally:
