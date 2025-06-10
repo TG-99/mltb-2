@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   gluetun:
     image: qmcgaw/gluetun
@@ -9,10 +7,11 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      - VPN_SERVICE_PROVIDER=nordvpn
-      - OPENVPN_USER=luke.wilkins6@hotmail.com
-      - OPENVPN_PASSWORD=Spongebob0604!
-      - SERVER_REGIONS=Germany
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - OPENVPN_USER=qYYmndrhAQd7cuf1
+      - OPENVPN_PASSWORD=5EETr50ZdLRGZeMRCnYRldOSzQ1aiMrY
+      - SERVER_COUNTRIES=Netherlands
+      - FREE_ONLY=on
       # Timezone for accurate log times
       - TZ=GMT+6
       # Server list updater. 
@@ -21,14 +20,17 @@ services:
       - "${PORT}:${PORT}"
       - "${BASE_URL_PORT}:${BASE_URL_PORT}"
       - "${RCLONE_SERVE_PORT}:${RCLONE_SERVE_PORT}"
+      - "8070:8070"
+      - "8090:8090"
     restart: always
-  app:
+  mltb:
     build: .
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_started 
+    container_name: mltb
     command: bash start.sh
     restart: on-failure
     env_file:
       - .env
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_started 
