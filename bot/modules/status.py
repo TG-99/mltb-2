@@ -1,18 +1,19 @@
 from psutil import cpu_percent, virtual_memory, disk_usage
-from pyrogram.filters import command, regex
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from time import time
+from asyncio import gather, iscoroutinefunction
 
-from bot import (
+from .. import (
     task_dict_lock,
     status_dict,
     task_dict,
     bot_start_time,
-    DOWNLOAD_DIR,
     intervals,
-    bot,
+    sabnzbd_client,
+    DOWNLOAD_DIR,
 )
-from ..helper.ext_utils.bot_utils import sync_to_async, new_task
+from ..core.torrent_manager import TorrentManager
+from ..core.jdownloader_booter import jdownloader
+from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.status_utils import (
     MirrorStatus,
     get_readable_file_size,
@@ -20,7 +21,6 @@ from ..helper.ext_utils.status_utils import (
     speed_string_to_bytes,
 )
 from ..helper.telegram_helper.bot_commands import BotCommands
-from ..helper.telegram_helper.filters import CustomFilters
 from ..helper.telegram_helper.message_utils import (
     send_message,
     delete_message,
@@ -33,7 +33,7 @@ from ..helper.telegram_helper.button_build import ButtonMaker
 
 
 @new_task
-async def mirror_status(_, message):
+async def task_status(_, message):
     async with task_dict_lock:
         count = len(task_dict)
     if count == 0:
@@ -60,30 +60,56 @@ async def mirror_status(_, message):
         await delete_message(message)
 
 
+async def get_download_status(download):
+    tool = download.tool
+    if tool in [
+        "telegram",
+        "yt-dlp",
+        "rclone",
+        "gDriveApi",
+    ]:
+        speed = download.speed()
+    else:
+        speed = 0
+    return (
+        await download.status()
+        if iscoroutinefunction(download.status)
+        else download.status()
+    ), speed
+
+
 @new_task
 async def status_pages(_, query):
     data = query.data.split()
     key = int(data[1])
+    await query.answer()
     if data[2] == "ref":
-        await query.answer()
         await update_status_message(key, force=True)
     elif data[2] in ["nex", "pre"]:
-        await query.answer()
         async with task_dict_lock:
-            if data[2] == "nex":
-                status_dict[key]["page_no"] += status_dict[key]["page_step"]
-            else:
-                status_dict[key]["page_no"] -= status_dict[key]["page_step"]
+            if key in status_dict:
+                if data[2] == "nex":
+                    status_dict[key]["page_no"] += status_dict[key]["page_step"]
+                else:
+                    status_dict[key]["page_no"] -= status_dict[key]["page_step"]
     elif data[2] == "ps":
-        await query.answer()
         async with task_dict_lock:
-            status_dict[key]["page_step"] = int(data[3])
+            if key in status_dict:
+                status_dict[key]["page_step"] = int(data[3])
     elif data[2] == "st":
-        await query.answer()
         async with task_dict_lock:
-            status_dict[key]["status"] = data[3]
+            if key in status_dict:
+                status_dict[key]["status"] = data[3]
         await update_status_message(key, force=True)
     elif data[2] == "ov":
+        ds, ss = await TorrentManager.overall_speed()
+        if sabnzbd_client.LOGGED_IN:
+            sds = await sabnzbd_client.get_downloads()
+            sds = int(float(sds["queue"].get("kbpersec", "0"))) * 1024
+            ds += sds
+        if jdownloader.is_connected:
+            jdres = await jdownloader.device.downloadcontroller.get_speed_in_bytes()
+            ds += jdres
         message = query.message
         tasks = {
             "Download": 0,
@@ -101,21 +127,24 @@ async def status_pages(_, query):
             "ConvertMedia": 0,
             "FFmpeg": 0,
         }
-        dl_speed = 0
+        dl_speed = ds
         up_speed = 0
-        seed_speed = 0
+        seed_speed = ss
         async with task_dict_lock:
-            for download in task_dict.values():
-                match await sync_to_async(download.status):
+            status_results = await gather(
+                *(get_download_status(download) for download in task_dict.values())
+            )
+            for status, speed in status_results:
+                match status:
                     case MirrorStatus.STATUS_DOWNLOAD:
                         tasks["Download"] += 1
-                        dl_speed += speed_string_to_bytes(download.speed())
+                        if speed:
+                            dl_speed += speed_string_to_bytes(speed)
                     case MirrorStatus.STATUS_UPLOAD:
                         tasks["Upload"] += 1
-                        up_speed += speed_string_to_bytes(download.speed())
+                        up_speed += speed_string_to_bytes(speed)
                     case MirrorStatus.STATUS_SEED:
                         tasks["Seed"] += 1
-                        seed_speed += speed_string_to_bytes(download.seed_speed())
                     case MirrorStatus.STATUS_ARCHIVE:
                         tasks["Archive"] += 1
                     case MirrorStatus.STATUS_EXTRACT:
@@ -137,10 +166,9 @@ async def status_pages(_, query):
                     case MirrorStatus.STATUS_CONVERT:
                         tasks["ConvertMedia"] += 1
                     case MirrorStatus.STATUS_FFMPEG:
-                        tasks["FFMPEG"] += 1
+                        tasks["FFmpeg"] += 1
                     case _:
                         tasks["Download"] += 1
-                        dl_speed += speed_string_to_bytes(download.speed())
 
         msg = f"""<b>DL:</b> {tasks['Download']} | <b>UP:</b> {tasks['Upload']} | <b>SD:</b> {tasks['Seed']} | <b>AR:</b> {tasks['Archive']}
 <b>EX:</b> {tasks['Extract']} | <b>SP:</b> {tasks['Split']} | <b>QD:</b> {tasks['QueueDl']} | <b>QU:</b> {tasks['QueueUp']}
@@ -154,13 +182,3 @@ async def status_pages(_, query):
         button = ButtonMaker()
         button.data_button("Back", f"status {data[1]} ref")
         await edit_message(message, msg, button.build_menu())
-
-
-bot.add_handler(
-    MessageHandler(
-        mirror_status,
-        filters=command(BotCommands.StatusCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(CallbackQueryHandler(status_pages, filters=regex("^status")))

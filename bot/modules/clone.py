@@ -1,11 +1,9 @@
 from asyncio import gather
 from json import loads
-from pyrogram.filters import command
-from pyrogram.handlers import MessageHandler
 from secrets import token_urlsafe
 from aiofiles.os import remove
 
-from bot import LOGGER, task_dict, task_dict_lock, bot, bot_loop
+from .. import LOGGER, task_dict, task_dict_lock, bot_loop
 from ..helper.ext_utils.bot_utils import (
     sync_to_async,
     cmd_exec,
@@ -29,8 +27,6 @@ from ..helper.mirror_leech_utils.gdrive_utils.count import GoogleDriveCount
 from ..helper.mirror_leech_utils.rclone_utils.transfer import RcloneTransferHelper
 from ..helper.mirror_leech_utils.status_utils.gdrive_status import GoogleDriveStatus
 from ..helper.mirror_leech_utils.status_utils.rclone_status import RcloneStatus
-from ..helper.telegram_helper.bot_commands import BotCommands
-from ..helper.telegram_helper.filters import CustomFilters
 from ..helper.telegram_helper.message_utils import (
     send_message,
     delete_message,
@@ -209,7 +205,6 @@ class Clone(TaskListener):
                     self.up_dest += (
                         self.name if self.up_dest.endswith(":") else f"/{self.name}"
                     )
-
                     mime_type = "Folder"
                 else:
                     if not self.name:
@@ -274,15 +269,15 @@ class Clone(TaskListener):
                 cmd_exec(cmd2),
                 cmd_exec(cmd3),
             )
-            if res1[2] != res2[2] != res3[2] != 0:
+            if res1[2] != 0 or res2[2] != 0 or res3[2] != 0:
                 if res1[2] == -9:
                     return
                 files = None
                 folders = None
                 self.size = 0
-                LOGGER.error(
-                    f"Error: While getting rclone stat. Path: {destination}. Stderr: {res1[1][:4000]}"
-                )
+                error = res1[1] or res2[1] or res3[1]
+                msg = f"Error: While getting rclone stat. Path: {destination}. Stderr: {error[:4000]}"
+                await self.on_upload_error(msg)
             else:
                 files = len(res1[0].split("\n"))
                 folders = len(res2[0].strip().split("\n")) if res2[0] else 0
@@ -297,14 +292,5 @@ class Clone(TaskListener):
             )
 
 
-async def clone(client, message):
+async def clone_node(client, message):
     bot_loop.create_task(Clone(client, message).new_event())
-
-
-bot.add_handler(
-    MessageHandler(
-        clone,
-        filters=command(BotCommands.CloneCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)

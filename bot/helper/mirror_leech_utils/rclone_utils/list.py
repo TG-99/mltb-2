@@ -8,7 +8,8 @@ from pyrogram.filters import regex, user
 from pyrogram.handlers import CallbackQueryHandler
 from time import time
 
-from bot import LOGGER, config_dict
+from .... import LOGGER
+from ....core.config_manager import Config
 from ...ext_utils.bot_utils import cmd_exec, update_user_ldata, new_task
 from ...ext_utils.db_handler import database
 from ...ext_utils.status_utils import get_readable_file_size, get_readable_time
@@ -112,10 +113,10 @@ async def path_updates(_, query, obj):
             if obj.config_path == "rclone.conf"
             else f"mrcc:{obj.remote}{obj.path}"
         )
-        if path != obj.listener.user_dict.get("rclone_path"):
-            update_user_ldata(obj.listener.user_id, "rclone_path", path)
+        if path != obj.listener.user_dict.get("RCLONE_PATH"):
+            update_user_ldata(obj.listener.user_id, "RCLONE_PATH", path)
             await obj.get_path_buttons()
-            if config_dict["DATABASE_URL"]:
+            if Config.DATABASE_URL:
                 await database.update_user_data(obj.listener.user_id)
     elif data[1] == "owner":
         obj.config_path = "rclone.conf"
@@ -193,7 +194,7 @@ class RcloneList:
             orig_index = index + self.iter_start
             name = idict["Path"]
             if name in self.selected_pathes or any(
-                p.endswith(f"/{name}") for p in self.selected_pathes
+                p.strip().endswith(f"/{name}") for p in self.selected_pathes
             ):
                 name = f"✅ {name}"
             if idict["IsDir"]:
@@ -241,7 +242,7 @@ class RcloneList:
             else "\nTransfer Type: <i>Upload</i>"
         )
         if self.list_status == "rcu":
-            default_path = config_dict["RCLONE_PATH"]
+            default_path = Config.RCLONE_PATH
             msg += f"\nDefault Rclone Path: {default_path}" if default_path else ""
         msg += f"\n\nItems: {items_no}"
         if items_no > LIST_LIMIT:
@@ -252,10 +253,10 @@ class RcloneList:
         await self._send_list_message(msg, button)
 
     async def get_path(self, itype=""):
-        if itype:
-            self.item_type == itype
-        elif self.list_status == "rcu":
-            self.item_type == "--dirs-only"
+        if self.list_status == "rcu":
+            self.item_type = "--dirs-only"
+        elif itype:
+            self.item_type = itype
         cmd = [
             "rclone",
             "lsjson",
@@ -270,26 +271,31 @@ class RcloneList:
         if self.listener.is_cancelled:
             return
         res, err, code = await cmd_exec(cmd)
-        if code not in [0, -9]:
-            if not err:
-                err = "Use <code>/shell cat rlog.txt</code> to see more information"
+        if code in [0, -9]:
+            result = loads(res)
+            if (
+                len(result) == 0
+                and itype != self.item_type
+                and self.list_status == "rcd"
+            ):
+                itype = (
+                    "--dirs-only"
+                    if self.item_type == "--files-only"
+                    else "--files-only"
+                )
+                self.item_type = itype
+                await self.get_path(itype)
+            else:
+                self.path_list = sorted(result, key=lambda x: x["Path"])
+                self.iter_start = 0
+                await self.get_path_buttons()
+        else:
             LOGGER.error(
                 f"While rclone listing. Path: {self.remote}{self.path}. Stderr: {err}"
             )
             self.remote = err[:4000]
             self.path = ""
             self.event.set()
-            return
-        result = loads(res)
-        if len(result) == 0 and itype != self.item_type and self.list_status == "rcd":
-            itype = (
-                "--dirs-only" if self.item_type == "--files-only" else "--files-only"
-            )
-            self.item_type = itype
-            return await self.get_path(itype)
-        self.path_list = sorted(result, key=lambda x: x["Path"])
-        self.iter_start = 0
-        await self.get_path_buttons()
 
     async def list_remotes(self):
         config = RawConfigParser()

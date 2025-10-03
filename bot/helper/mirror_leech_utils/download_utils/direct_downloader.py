@@ -1,13 +1,10 @@
 from secrets import token_urlsafe
 
-from bot import (
+from .... import (
     LOGGER,
-    aria2_options,
-    aria2c_global,
     task_dict,
     task_dict_lock,
 )
-from ...ext_utils.bot_utils import sync_to_async
 from ...ext_utils.task_manager import check_running_tasks, stop_duplicate_check
 from ...listeners.direct_listener import DirectListener
 from ...mirror_leech_utils.status_utils.direct_status import DirectStatus
@@ -44,12 +41,9 @@ async def add_direct_download(listener, path):
         if listener.is_cancelled:
             return
 
-    a2c_opt = {**aria2_options}
-    [a2c_opt.pop(k) for k in aria2c_global if k in aria2_options]
+    a2c_opt = {"follow-torrent": "false", "follow-metalink": "false"}
     if header := details.get("header"):
         a2c_opt["header"] = header
-    a2c_opt["follow-torrent"] = "false"
-    a2c_opt["follow-metalink"] = "false"
     directListener = DirectListener(path, listener, a2c_opt)
 
     async with task_dict_lock:
@@ -63,4 +57,4 @@ async def add_direct_download(listener, path):
         if listener.multi <= 1:
             await send_status_message(listener.message)
 
-    await sync_to_async(directListener.download, contents)
+    await directListener.download(contents)

@@ -8,7 +8,7 @@ from pyrogram.handlers import CallbackQueryHandler
 from tenacity import RetryError
 from time import time
 
-from bot import config_dict
+from ....core.config_manager import Config
 from ...ext_utils.bot_utils import update_user_ldata, new_task
 from ...ext_utils.db_handler import database
 from ...ext_utils.status_utils import get_readable_file_size, get_readable_time
@@ -87,10 +87,10 @@ async def id_updates(_, query, obj):
             id_ = f"sa:{obj.id}" if obj.use_sa else f"tp:{obj.id}"
         else:
             id_ = f"mtp:{obj.id}"
-        if id_ != obj.listener.user_dict.get("gdrive_id"):
-            update_user_ldata(obj.listener.user_id, "gdrive_id", id_)
+        if id_ != obj.listener.user_dict.get("GDRIVE_ID"):
+            update_user_ldata(obj.listener.user_id, "GDRIVE_ID", id_)
             await obj.get_items_buttons()
-            if config_dict["DATABASE_URL"]:
+            if Config.DATABASE_URL:
                 await database.update_user_data(obj.listener.user_id)
     elif data[1] == "owner":
         obj.token_path = "token.pickle"
@@ -210,9 +210,7 @@ class GoogleDriveList(GoogleDriveHelper):
             else "\nTransfer Type: <i>Upload</i>"
         )
         if self.list_status == "gdu":
-            default_id = (
-                self.listener.user_dict.get("gdrive_id") or config_dict["GDRIVE_ID"]
-            )
+            default_id = self.listener.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
             msg += f"\nDefault Gdrive ID: {default_id}" if default_id else ""
         msg += f"\n\nItems: {items_no}"
         if items_no > LIST_LIMIT:
@@ -224,10 +222,10 @@ class GoogleDriveList(GoogleDriveHelper):
         await self._send_list_message(msg, button)
 
     async def get_items(self, itype=""):
-        if itype:
-            self.item_type == itype
-        elif self.list_status == "gdu":
-            self.item_type == "folders"
+        if self.list_status == "gdu":
+            self.item_type = "folders"
+        elif itype:
+            self.item_type = itype
         try:
             files = self.get_files_by_folder_id(self.id, self.item_type)
             if self.listener.is_cancelled:
@@ -242,10 +240,11 @@ class GoogleDriveList(GoogleDriveHelper):
         if len(files) == 0 and itype != self.item_type and self.list_status == "gdd":
             itype = "folders" if self.item_type == "files" else "files"
             self.item_type = itype
-            return await self.get_items(itype)
-        self.items_list = natsorted(files)
-        self.iter_start = 0
-        await self.get_items_buttons()
+            await self.get_items(itype)
+        else:
+            self.items_list = natsorted(files)
+            self.iter_start = 0
+            await self.get_items_buttons()
 
     async def list_drives(self):
         self.service = self.authorize()
