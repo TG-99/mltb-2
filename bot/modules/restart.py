@@ -13,7 +13,7 @@ from ..helper.telegram_helper.message_utils import (
 from ..helper.ext_utils.db_handler import database
 from ..helper.ext_utils.files_utils import clean_all
 from ..helper.telegram_helper.button_build import ButtonMaker
-from ..core.mltb_client import TgClient
+from ..core.telegram_client import TgManager
 from ..core.config_manager import Config
 from ..core.jdownloader_booter import jdownloader
 from ..core.torrent_manager import TorrentManager
@@ -31,7 +31,7 @@ async def restart_bot(_, message):
 async def send_incomplete_task_message(cid, msg_id, msg):
     try:
         if msg.startswith("Restarted Successfully!"):
-            await TgClient.bot.edit_message_text(
+            await TgManager.bot.editTextMessage(
                 chat_id=cid,
                 message_id=msg_id,
                 text=msg,
@@ -39,7 +39,7 @@ async def send_incomplete_task_message(cid, msg_id, msg):
             )
             await remove(".restartmsg")
         else:
-            await TgClient.bot.send_message(
+            await TgManager.bot.sendMessage(
                 chat_id=cid,
                 text=msg,
                 disable_web_page_preview=True,
@@ -72,7 +72,7 @@ async def restart_notification():
 
     if await aiopath.isfile(".restartmsg"):
         try:
-            await TgClient.bot.edit_message_text(
+            await TgManager.bot.editTextMessage(
                 chat_id=chat_id, message_id=msg_id, text="Restarted Successfully!"
             )
         except:
@@ -82,15 +82,15 @@ async def restart_notification():
 
 @new_task
 async def confirm_restart(_, query):
-    await query.answer()
-    data = query.data.split()
-    message = query.message
+    await query.answer(text="")
+    data = query.text.split()
+    message = await query.getMessage()
+    reply_to = await message.getRepliedMessage()
+    await delete_message(message)
     if data[1] == "confirm":
-        reply_to = message.reply_to_message
         intervals["stopAll"] = True
         restart_message = await send_message(reply_to, "Restarting...")
-        await delete_message(message)
-        await TgClient.stop()
+        await TgManager.stop()
         if scheduler.running:
             scheduler.shutdown(wait=False)
         if qb := intervals["qb"]:
@@ -132,7 +132,5 @@ async def confirm_restart(_, query):
         proc2 = await create_subprocess_exec("python3", "update.py")
         await gather(proc1.wait(), proc2.wait())
         async with aiopen(".restartmsg", "w") as f:
-            await f.write(f"{restart_message.chat.id}\n{restart_message.id}\n")
+            await f.write(f"{restart_message.chat_id}\n{restart_message.id}\n")
         osexecl(executable, executable, "-m", "bot")
-    else:
-        await delete_message(message)

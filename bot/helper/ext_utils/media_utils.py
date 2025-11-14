@@ -18,6 +18,15 @@ from .files_utils import get_mime_type, is_archive, is_archive_split
 from .status_utils import time_to_seconds
 
 
+def optimize_thumbnail(photo_dir, max_size=204799):
+    if ospath.getsize(photo_dir) > max_size:
+        quality = 95
+        while ospath.getsize(photo_dir) > max_size:
+            img = Image.open(photo_dir)
+            img.save(photo_dir, "JPEG", quality=quality, optimize=True)
+            quality -= 5
+
+
 async def create_thumb(msg, _id=""):
     if not _id:
         _id = time()
@@ -25,7 +34,8 @@ async def create_thumb(msg, _id=""):
     else:
         path = "thumbnails"
     await makedirs(path, exist_ok=True)
-    photo_dir = await msg.download()
+    res = await msg.download(synchronous=True)
+    photo_dir = res.path
     output = ospath.join(path, f"{_id}.jpg")
     await sync_to_async(Image.open(photo_dir).convert("RGB").save, output, "JPEG")
     await remove(photo_dir)
@@ -148,13 +158,13 @@ async def take_ss(video_file, ss_nb) -> bool:
             resutls = await wait_for(gather(*cmds), timeout=60)
             if resutls[0][2] != 0:
                 LOGGER.error(
-                    f"Error while creating sreenshots from video. Path: {video_file}. stderr: {resutls[0][1]}"
+                    f"Error while creating screenshots from video. Path: {video_file}. stderr: {resutls[0][1]}"
                 )
                 await rmtree(dirpath, ignore_errors=True)
                 return False
         except:
             LOGGER.error(
-                f"Error while creating sreenshots from video. Path: {video_file}. Error: Timeout some issues with ffmpeg with specific arch!"
+                f"Error while creating screenshots from video. Path: {video_file}. Error: Timeout some issues with ffmpeg with specific arch!"
             )
             await rmtree(dirpath, ignore_errors=True)
             return False
@@ -718,7 +728,7 @@ class FFMpeg:
                 break
             elif duration == lpd:
                 LOGGER.warning(
-                    f"This file has been splitted with default stream and audio, so you will only see one part with less size from orginal one because it doesn't have all streams and audios. This happens mostly with MKV videos. Path: {f_path}"
+                    f"This file has been splitted with default stream and audio, so you will only see one part with less size from original one because it doesn't have all streams and audios. This happens mostly with MKV videos. Path: {f_path}"
                 )
                 break
             elif lpd <= 3:

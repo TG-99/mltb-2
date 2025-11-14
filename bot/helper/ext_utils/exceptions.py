@@ -11,12 +11,18 @@ class NotSupportedExtractionArchive(Exception):
 
 
 class RssShutdownException(Exception):
-    """This exception should be raised when shutdown is called to stop the montior"""
+    """This exception should be raised when shutdown is called to stop the monitor"""
 
     pass
 
 
 class TgLinkException(Exception):
     """No Access granted for this chat"""
+
+    pass
+
+
+class TgUploadException(Exception):
+    """Error while uploading to Telegram except floodwait"""
 
     pass

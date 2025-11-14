@@ -1,5 +1,5 @@
 from ..telegram_helper.bot_commands import BotCommands
-from ...core.mltb_client import TgClient
+from ...core.telegram_client import TgManager
 
 mirror = """<b>Send link along with command line or </b>
 
@@ -145,7 +145,7 @@ if u have link(folder) have splitted files:
 tg_links = """<b>TG Links</b>:
 
 Treat links like any direct link
-Some links need user access so you must add USER_SESSION_STRING for it.
+Some links need user access so you must add USER DATABASE (tdlib_user) for it.
 Three types of links:
 Public: https://t.me/channel_name/message_id
 Private: tg://openmessage?user_id=xxxxxx&message_id=xxxxx
@@ -249,7 +249,7 @@ Notes:
 Examples: ["-i mltb.mkv -c copy -c:s srt mltb.mkv", "-i mltb.video -c copy -c:s srt mltb", "-i mltb.m4a -c:a libmp3lame -q:a 2 mltb.mp3", "-i mltb.audio -c:a libmp3lame -q:a 2 mltb.mp3", "-i mltb -map 0:a -c copy mltb.mka -map 0:s -c copy mltb.srt", "-i mltb -i tg://openmessage?user_id=5272663208&message_id=322801 -filter_complex 'overlay=W-w-10:H-h-10' -c:a copy mltb"]
 Here I will explain how to use mltb.* which is reference to files you want to work on.
 1. First cmd: the input is mltb.mkv so this cmd will work only on mkv videos and the output is mltb.mkv also so all outputs is mkv. -del will delete the original media after complete run of the cmd.
-2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extenstion is same as input files.
+2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extension is same as input files.
 3. Third cmd: the input in mltb.m4a so this cmd will work only on m4a audios and the output is mltb.mp3 so the output extension is mp3.
 4. Fourth cmd: the input is mltb.audio so this cmd will work on all audios and the output is mltb.mp3 so the output extension is mp3.
 5. Fifth cmd: You can add telegram link for small size input like photo to set watermark"""
@@ -348,7 +348,7 @@ PASSWORD_ERROR_MESSAGE = """
 """
 
 user_settings_text = {
-    "LEECH_SPLIT_SIZE": f"Send Leech split size in bytes or use gb or mb. Example: 40000000 or 2.5gb or 1000mb. IS_PREMIUM_USER: {TgClient.IS_PREMIUM_USER}. Timeout: 60 sec",
+    "LEECH_SPLIT_SIZE": f"Send Leech split size in bytes or use gb or mb. Example: 40000000 or 2.5gb or 1000mb. IS_PREMIUM_USER: {TgManager.IS_PREMIUM_USER}. Timeout: 60 sec",
     "LEECH_DUMP_CHAT": """"Send leech destination ID/USERNAME/PM. 
 * b:id/@username/pm (b: means leech by bot) (id or username of the chat or write pm means private message so bot will send the files in private to you) when you should use b:(leech by bot)? When your default settings is leech by user and you want to leech by bot for specific task.
 * u:id/@username(u: means leech by user) This incase OWNER added USER_STRING_SESSION.
@@ -384,7 +384,7 @@ Notes:
 - To execute one of those lists in bot for example, you must use -ff subtitle (list key) or -ff convert (list key)
 Here I will explain how to use mltb.* which is reference to files you want to work on.
 1. First cmd: the input is mltb.mkv so this cmd will work only on mkv videos and the output is mltb.mkv also so all outputs is mkv. -del will delete the original media after complete run of the cmd.
-2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extenstion is same as input files.
+2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extension is same as input files.
 3. Third cmd: the input in mltb.m4a so this cmd will work only on m4a audios and the output is mltb.mp3 so the output extension is mp3.
 4. Fourth cmd: the input is mltb.audio so this cmd will work on all audios and the output is mltb.mp3 so the output extension is mp3.
 5. FFmpeg Variables in last cmd which is metadata ({title}, {title2}, etc...), you can edit them in usetting

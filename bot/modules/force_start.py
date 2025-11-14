@@ -16,7 +16,7 @@ from ..helper.ext_utils.task_manager import start_dl_from_queued, start_up_from_
 
 @new_task
 async def remove_from_queue(_, message):
-    user_id = message.from_user.id if message.from_user else message.sender_chat.id
+    user_id = message.from_id
     msg = message.text.split()
     status = msg[1] if len(msg) > 1 and msg[1] in ["fd", "fu"] else ""
     if status and len(msg) > 2 or not status and len(msg) > 1:
@@ -25,16 +25,16 @@ async def remove_from_queue(_, message):
         if task is None:
             await send_message(message, f"GID: <code>{gid}</code> Not Found.")
             return
-    elif reply_to_id := message.reply_to_message_id:
+    elif reply_to := message.reply_to:
         async with task_dict_lock:
-            task = task_dict.get(reply_to_id)
+            task = task_dict.get(reply_to.message_id)
         if task is None:
             await send_message(message, "This is not an active task!")
             return
     elif len(msg) in {1, 2}:
         msg = f"""Reply to an active Command message which was used to start the download/upload.
 <code>/{BotCommands.ForceStartCommand[0]}</code> fd (to remove it from download queue) or fu (to remove it from upload queue) or nothing to start remove it from both download and upload queue.
-Also send <code>/{BotCommands.ForceStartCommand[0]} GID</code> fu|fd or obly gid to force start by removeing the task rom queue!
+Also send <code>/{BotCommands.ForceStartCommand[0]} GID</code> fu|fd or obly gid to force start by removing the task rom queue!
 Examples:
 <code>/{BotCommands.ForceStartCommand[1]}</code> GID fu (force upload)
 <code>/{BotCommands.ForceStartCommand[1]}</code> GID (force download and upload)

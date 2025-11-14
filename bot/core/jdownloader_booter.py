@@ -6,7 +6,7 @@ from re import match
 
 from .. import LOGGER
 from ..helper.ext_utils.bot_utils import cmd_exec, new_task
-from .mltb_client import TgClient
+from .telegram_client import TgManager
 from .config_manager import Config
 from myjd import MyJdApi
 
@@ -27,8 +27,8 @@ class JDownloader(MyJdApi):
             self.is_connected = False
             self.error = "JDownloader Credentials not provided!"
             return
-        self.error = "Connecting... Try agin after couple of seconds"
-        self._device_name = f"{randint(0, 1000)}@{TgClient.NAME}"
+        self.error = "Connecting... Try again after couple of seconds"
+        self._device_name = f"{randint(0, 1000)}@{TgManager.NAME}"
         if await path.exists("/JDownloader/logs"):
             LOGGER.info(
                 "Starting JDownloader... This might take up to 10 sec and might restart once if update available!"

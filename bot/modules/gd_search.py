@@ -1,9 +1,5 @@
 from .. import LOGGER, user_data
-from ..helper.ext_utils.bot_utils import (
-    sync_to_async,
-    get_telegraph_list,
-    new_task,
-)
+from ..helper.ext_utils.bot_utils import sync_to_async, get_telegraph_list, new_task
 from ..helper.mirror_leech_utils.gdrive_utils.search import GoogleDriveSearch
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import send_message, edit_message
@@ -60,26 +56,27 @@ async def _list_drive(key, message, item_type, is_recursive, user_token, user_id
 
 @new_task
 async def select_type(_, query):
-    user_id = query.from_user.id
-    message = query.message
-    key = message.reply_to_message.text.split(maxsplit=1)[1].strip()
-    data = query.data.split()
+    user_id = query.sender_user_id
+    message = await query.getMessage()
+    reply_to = await message.getRepliedMessage()
+    key = reply_to.text.split(maxsplit=1)[1].strip()
+    data = query.text.split()
     if user_id != int(data[1]):
         return await query.answer(text="Not Yours!", show_alert=True)
     elif data[2] == "rec":
-        await query.answer()
+        await query.answer(text="")
         is_recursive = not bool(eval(data[3]))
         buttons = await list_buttons(user_id, is_recursive, eval(data[4]))
         return await edit_message(message, "Choose list options:", buttons)
     elif data[2] == "ut":
-        await query.answer()
+        await query.answer(text="")
         user_token = not bool(eval(data[4]))
         buttons = await list_buttons(user_id, eval(data[3]), user_token)
         return await edit_message(message, "Choose list options:", buttons)
     elif data[2] == "cancel":
-        await query.answer()
+        await query.answer(text="")
         return await edit_message(message, "list has been canceled!")
-    await query.answer()
+    await query.answer(text="")
     item_type = data[2]
     is_recursive = eval(data[3])
     user_token = eval(data[4])
@@ -91,9 +88,6 @@ async def select_type(_, query):
 async def gdrive_search(_, message):
     if len(message.text.split()) == 1:
         return await send_message(message, "Send a search key along with command")
-    user_id = message.from_user.id
+    user_id = message.from_id
     buttons = await list_buttons(user_id)
     await send_message(message, "Choose list options:", buttons)
-
-
-

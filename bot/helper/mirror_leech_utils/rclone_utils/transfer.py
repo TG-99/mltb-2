@@ -184,8 +184,6 @@ class RcloneTransferHelper:
             cmd.extend(
                 (
                     "--drive-acknowledge-abuse",
-                    "--drive-chunk-size",
-                    "128M",
                     "--tpslimit",
                     "1",
                     "--tpslimit-burst",
@@ -314,6 +312,10 @@ class RcloneTransferHelper:
         if remote_type == "drive" and not self._listener.rc_flags:
             cmd.extend(
                 (
+                    "--drive-chunk-size",
+                    "64M",
+                    "--drive-upload-cutoff",
+                    "64M",
                     "--tpslimit",
                     "1",
                     "--tpslimit-burst",

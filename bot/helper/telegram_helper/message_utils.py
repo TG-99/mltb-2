@@ -1,92 +1,126 @@
 from asyncio import sleep
-from pyrogram.errors import FloodWait, FloodPremiumWait
 from re import match as re_match
 from time import time
+from pytdbot.types import (
+    InputMessageReplyToMessage,
+    MessageSendOptions,
+    MessageTopicThread,
+)
 
-from ... import LOGGER, status_dict, task_dict_lock, intervals, DOWNLOAD_DIR
+from ... import LOGGER, status_dict, task_dict_lock, intervals
 from ...core.config_manager import Config
-from ...core.mltb_client import TgClient
+from ...core.telegram_client import TgManager
 from ..ext_utils.bot_utils import SetInterval
 from ..ext_utils.exceptions import TgLinkException
 from ..ext_utils.status_utils import get_readable_message
 
 
 async def send_message(message, text, buttons=None, block=True):
-    try:
-        return await message.reply(
-            text=text,
-            quote=True,
-            disable_web_page_preview=True,
-            disable_notification=True,
-            reply_markup=buttons,
-        )
-    except FloodWait as f:
-        LOGGER.warning(str(f))
-        if not block:
-            return str(f)
-        await sleep(f.value * 1.2)
-        return await send_message(message, text, buttons)
-    except Exception as e:
-        LOGGER.error(str(e))
-        return str(e)
+    res = await message.reply_text(
+        text=text,
+        disable_web_page_preview=True,
+        disable_notification=True,
+        reply_markup=buttons,
+    )
+    if res.is_error:
+        if wait_for := res.limited_seconds:
+            LOGGER.warning(res["message"])
+            if block:
+                await sleep(wait_for * 1.2)
+                return await send_message(message, text, buttons)
+        LOGGER.error(res["message"])
+        return res["message"]
+    return res
 
 
 async def edit_message(message, text, buttons=None, block=True):
-    try:
-        return await message.edit(
-            text=text,
-            disable_web_page_preview=True,
-            reply_markup=buttons,
-        )
-    except FloodWait as f:
-        LOGGER.warning(str(f))
-        if not block:
-            return str(f)
-        await sleep(f.value * 1.2)
-        return await edit_message(message, text, buttons)
-    except Exception as e:
-        LOGGER.error(str(e))
-        return str(e)
+    res = await message.edit_text(
+        text=text,
+        disable_web_page_preview=True,
+        reply_markup=buttons,
+    )
+    if res.is_error:
+        if wait_for := res.limited_seconds:
+            LOGGER.warning(res["message"])
+            if block:
+                await sleep(wait_for * 1.2)
+                return await edit_message(message, text, buttons)
+        LOGGER.error(res["message"])
+        return res["message"]
+    return res
 
 
 async def send_file(message, file, caption=""):
-    try:
-        return await message.reply_document(
-            document=file, quote=True, caption=caption, disable_notification=True
-        )
-    except FloodWait as f:
-        LOGGER.warning(str(f))
-        await sleep(f.value * 1.2)
-        return await send_file(message, file, caption)
-    except Exception as e:
-        LOGGER.error(str(e))
-        return str(e)
+    res = await message.reply_document(
+        document=file, caption=caption, disable_notification=True
+    )
+    if res.is_error:
+        if wait_for := res.limited_seconds:
+            LOGGER.warning(res["message"])
+            await sleep(wait_for * 1.2)
+            return await send_file(message, file, caption)
+        LOGGER.error(res["message"])
+        return res["message"]
+    return res
+
+
+async def send_message_with_content(message, content):
+    res = await message._client.sendMessage(
+        chat_id=message.chat_id,
+        topic_id=message.topic_id,
+        reply_to=InputMessageReplyToMessage(message_id=message.id),
+        options=MessageSendOptions(disable_notification=True),
+        input_message_content=content,
+    )
+    if res.is_error:
+        if wait_for := res.limited_seconds:
+            LOGGER.warning(res["message"])
+            await sleep(wait_for * 1.2)
+            return await send_message_with_content(message, content)
+    return res
+
+
+async def send_album(message, contents):
+    res = await TgManager.bot.sendMessageAlbum(
+        chat_id=message.chat_id,
+        topic_id=message.topic_id,
+        reply_to=InputMessageReplyToMessage(message_id=message.id),
+        options=MessageSendOptions(disable_notification=True),
+        input_message_contents=contents,
+    )
+    if res.is_error:
+        if wait_for := res.limited_seconds:
+            LOGGER.warning(res["message"])
+            await sleep(wait_for * 1.2)
+            return await send_album(message, contents)
+        LOGGER.error(res["message"])
+        return [message]
+    return res
 
 
 async def send_rss(text, chat_id, thread_id):
-    try:
-        app = TgClient.user or TgClient.bot
-        return await app.send_message(
-            chat_id=chat_id,
-            text=text,
-            disable_web_page_preview=True,
-            message_thread_id=thread_id,
-            disable_notification=True,
-        )
-    except (FloodWait, FloodPremiumWait) as f:
-        LOGGER.warning(str(f))
-        await sleep(f.value * 1.2)
-        return await send_rss(text)
-    except Exception as e:
-        LOGGER.error(str(e))
-        return str(e)
+    app = TgManager.user or TgManager.bot
+    res = await app.sendTextMessage(
+        chat_id=chat_id,
+        text=text,
+        disable_web_page_preview=True,
+        topic_id=MessageTopicThread(thread_id),
+        disable_notification=True,
+    )
+    if res.is_error:
+        if wait_for := res.limited_seconds:
+            LOGGER.warning(res["message"])
+            await sleep(wait_for * 1.2)
+            return await send_rss(text)
+        LOGGER.error(res["message"])
+        return res["message"]
+    return res
 
 
 async def delete_message(message):
-    try:
-        await message.delete()
-    except Exception as e:
-        LOGGER.error(str(e))
+    res = await message.delete()
+    if res.is_error:
+        LOGGER.error(res["message"])
 
 
 async def auto_delete_message(cmd_message=None, bot_message=None):
@@ -120,8 +154,8 @@ async def get_tg_link_message(link):
         msg = re_match(
             r"tg:\/\/openmessage\?user_id=([0-9]+)&message_id=([0-9-]+)", link
         )
-        if not TgClient.user:
-            raise TgLinkException("USER_SESSION_STRING required for this private link!")
+        if not TgManager.user:
+            raise TgLinkException("USER_SESSION required for this private link!")
 
     chat = msg[1]
     msg_id = msg[2]
@@ -149,35 +183,28 @@ async def get_tg_link_message(link):
         chat = int(chat) if private else int(f"-100{chat}")
 
     if not private:
-        try:
-            message = await TgClient.bot.get_messages(chat_id=chat, message_ids=msg_id)
-            if message.empty:
-                private = True
-        except Exception as e:
+        message = await TgManager.bot.getMessage(chat_id=chat, message_id=msg_id)
+        if message.is_error:
             private = True
-            if not TgClient.user:
-                raise e
+            if not TgManager.user:
+                raise TgLinkException(message["message"])
 
     if not private:
         return (links, "bot") if links else (message, "bot")
-    elif TgClient.user:
-        try:
-            user_message = await TgClient.user.get_messages(
-                chat_id=chat, message_ids=msg_id
-            )
-        except Exception as e:
+    elif TgManager.user:
+        user_message = await TgManager.user.getMessage(chat_id=chat, message_id=msg_id)
+        if user_message.is_error:
             raise TgLinkException(
-                f"You don't have access to this chat!. ERROR: {e}"
-            ) from e
-        if not user_message.empty:
-            return (links, "user") if links else (user_message, "user")
+                f"You don't have access to this chat!. ERROR: {user_message["message"]}"
+            )
+        return (links, "user") if links else (user_message, "user")
     else:
         raise TgLinkException("Private: Please report!")
 
 
 async def temp_download(msg):
-    path = f"{DOWNLOAD_DIR}temp"
-    return await msg.download(file_name=f"{path}/")
+    res = await msg.download(synchronous=True)
+    return res.path
 
 
 async def update_status_message(sid, force=False):
@@ -205,7 +232,7 @@ async def update_status_message(sid, force=False):
                 obj.cancel()
                 del intervals["status"][sid]
             return
-        if text != status_dict[sid]["message"].text:
+        if text != status_dict[sid]["text"]:
             message = await edit_message(
                 status_dict[sid]["message"], text, buttons, block=False
             )
@@ -220,14 +247,14 @@ async def update_status_message(sid, force=False):
                         f"Status with id: {sid} haven't been updated. Error: {message}"
                     )
                 return
-            status_dict[sid]["message"].text = text
+            status_dict[sid]["text"] = text
             status_dict[sid]["time"] = time()
 
 
 async def send_status_message(msg, user_id=0):
     if intervals["stopAll"]:
         return
-    sid = user_id or msg.chat.id
+    sid = user_id or msg.chat_id
     is_user = bool(user_id)
     async with task_dict_lock:
         if sid in status_dict:
@@ -251,8 +278,7 @@ async def send_status_message(msg, user_id=0):
                 )
                 return
             await delete_message(old_message)
-            message.text = text
-            status_dict[sid].update({"message": message, "time": time()})
+            status_dict[sid].update({"message": message, "text": text, "time": time()})
         else:
             text, buttons = await get_readable_message(sid, is_user)
             if text is None:
@@ -263,9 +289,9 @@ async def send_status_message(msg, user_id=0):
                     f"Status with id: {sid} haven't been sent. Error: {message}"
                 )
                 return
-            message.text = text
             status_dict[sid] = {
                 "message": message,
+                "text": text,
                 "time": time(),
                 "page_no": 1,
                 "page_step": 1,

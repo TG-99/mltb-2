@@ -49,10 +49,10 @@ async def task_status(_, message):
     else:
         text = message.text.split()
         if len(text) > 1:
-            user_id = message.from_user.id if text[1] == "me" else int(text[1])
+            user_id = message.from_id if text[1] == "me" else int(text[1])
         else:
             user_id = 0
-            sid = message.chat.id
+            sid = message.chat_id
             if obj := intervals["status"].get(sid):
                 obj.cancel()
                 del intervals["status"][sid]
@@ -80,9 +80,9 @@ async def get_download_status(download):
 
 @new_task
 async def status_pages(_, query):
-    data = query.data.split()
+    data = query.text.split()
     key = int(data[1])
-    await query.answer()
+    await query.answer(text="")
     if data[2] == "ref":
         await update_status_message(key, force=True)
     elif data[2] in ["nex", "pre"]:
@@ -110,7 +110,6 @@ async def status_pages(_, query):
         if jdownloader.is_connected:
             jdres = await jdownloader.device.downloadcontroller.get_speed_in_bytes()
             ds += jdres
-        message = query.message
         tasks = {
             "Download": 0,
             "Upload": 0,
@@ -166,7 +165,7 @@ async def status_pages(_, query):
                     case MirrorStatus.STATUS_CONVERT:
                         tasks["ConvertMedia"] += 1
                     case MirrorStatus.STATUS_FFMPEG:
-                        tasks["FFmpeg"] += 1
+                        tasks["FFMPEG"] += 1
                     case _:
                         tasks["Download"] += 1
 
@@ -181,4 +180,5 @@ async def status_pages(_, query):
 """
         button = ButtonMaker()
         button.data_button("Back", f"status {data[1]} ref")
+        message = await query.getMessage()
         await edit_message(message, msg, button.build_menu())

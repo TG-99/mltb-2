@@ -1,4 +1,4 @@
-This Telegram Bot, based on [python-aria-mirror-bot](https://github.com/lzzy12/python-aria-mirror-bot), has undergone
+This Telegram Bot based on [python-aria-mirror-bot](https://github.com/lzzy12/python-aria-mirror-bot), has undergone
 substantial modifications and is designed for efficiently mirroring or leeching files from the Internet to various
 destinations, including Google Drive, Telegram, or any rclone-supported cloud. It is built using asynchronous
 programming in Python.
@@ -54,7 +54,7 @@ programming in Python.
 - Download restricted messages (document or link) by tg private/public/super links (task option)
 - Choose transfer by bot or user session incase you have a premium plan (global, user option and task option)
 - Mix upload between user and bot session with respect to file size (global, user option and task option)
-- Upload with custom layout multiple thubnmail (global, user option and task option)
+- Upload with custom layout multiple thumbnail (global, user option and task option)
 - Topics support
 
 </details>
@@ -71,7 +71,7 @@ programming in Python.
   on [Sreeraj](https://github.com/SVR666) searchX-bot. (task option)
 - Stop Duplicates (global and user option)
 - Custom upload destination (global, user, and task option)
-- Ability to choose token.pickle or service acccount and upload destinations from list with or without buttons (global, user and task option)
+- Ability to choose token.pickle or service account and upload destinations from list with or without buttons (global, user and task option)
 - Index link support only
   for [Bhadoo](https://gitlab.com/GoogleDriveIndex/Google-Drive-Index/-/blob/master/src/worker.js)
 
@@ -135,7 +135,7 @@ programming in Python.
 - Store RSS data
 - Store incompleted task messages
 - Store JDownloader settings
-- Store config.py file on first build and incase any change occured to it, then next build it will define variables
+- Store config.py file on first build and incase any change occurred to it, then next build it will define variables
   from config.py instead of database
 
 </details>
@@ -260,6 +260,8 @@ cp config_sample.py config.py
 
 Fill up rest of the fields. Meaning of each field is discussed below.
 
+**NOTE**: To `Download/Upload` using your telegram account (`PREMIUM REQUIRED FOR UPLOAD ONLY`) and to send rss (`PREMIUM NOT REQUIRED`), mount the repo folder and generate new session using this command `python3 generate_user_database.py`. You can't use it in private message. Use it in superGroup.
+
 **1. Required Fields**
 
 - `BOT_TOKEN` (`Str`):  The Telegram Bot Token that you got from [@BotFather](https://t.me/BotFather).
@@ -273,10 +275,6 @@ Fill up rest of the fields. Meaning of each field is discussed below.
   from <https://my.telegram.org>.
 
 **2. Optional Fields**
-- `TG_PROXY` (`Dict`): The Proxy settings as dict. Ex: {"scheme": "socks5", "hostname": "11.22.33.44", "port": 1234, "username": "user", "password": "pass"}. The username and password can be omitted if the proxy doesn’t require authorization.
-
-- `USER_SESSION_STRING` (`Str`): To download/upload from your telegram account if user is `PREMIUM` and to send rss. To generate session string use this command `python3 generate_string_session.py` after mounting repo folder for sure. **NOTE**: You can't use bot with private message. Use it with superGroup.
-
 - `DATABASE_URL` (`Str`): Your Mongo Database URL (Connection string). Follow this [Create Database](https://github.com/anasty17/test?tab=readme-ov-file#create-database) to create database. Data will be saved in Database: bot settings, users settings, rss data and incomplete tasks. **NOTE**: You can always edit all settings that saved in database from the official site -> (Browse collections). 
 
 - `CMD_SUFFIX` (`Str`|`Int`): Commands index number. This number will added at the end all commands.
@@ -320,13 +318,13 @@ see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-b
   **Example**:
   - Here I will explain how to use mltb.* which is reference to files you want to work on.
   1. First cmd: the input is mltb.mkv so this cmd will work only on mkv videos and the output is mltb.mkv also so all outputs is mkv. `-del` will delete the original media after complete run of the cmd.
-  2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extenstion is same as input files.
+  2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extension is same as input files.
   3. Third cmd: the input in mltb.m4a so this cmd will work only on m4a audios and the output is mltb.mp3 so the output extension is mp3.
   4. Fourth cmd: the input is mltb.audio so this cmd will work on all audios and the output is mltb.mp3 so the output extension is mp3.
   5. FFmpeg Variables in last cmd which is metadata ({title}, {title2}, etc...), you can edit them in usetting
   6. Telegram link for small size inputs like photo to set watermark.
 
-- `NAME_SUBSTITUTE` (`Str`): Add word/letter/character/sentense/pattern to remove or replace with other words with sensitive case or without. 
+- `NAME_SUBSTITUTE` (`Str`): Add word/letter/character/sentence/pattern to remove or replace with other words with sensitive case or without. 
   **Notes**:
     - Before any character you must add `\BACKSLASH`, those are the characters: `\^$.|?*+()[]{}-`
     * Example: script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb | \\text\\/text/s
@@ -387,6 +385,7 @@ see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-b
 - `LEECH_DUMP_CHAT` (`Int`|`Str`): ID or USERNAME or PM(private message) to where files would be uploaded. Add `-100` before channel/superGroup id. To use only specific topic write it in this format `chat_id|thread_id`. Ex:-100XXXXXXXXXXX or -100XXXXXXXXXXX|10 or pm or @xxxxxxx or @xxxxxxx|10.
 
 - `THUMBNAIL_LAYOUT` (`Str`): Thumbnail layout (widthxheight, 2x2, 3x3, 2x4, 4x4, ...) of how many photo arranged for the thumbnail.
+
 
 **7. qBittorrent/Aria2c/Sabnzbd**
 
@@ -784,13 +783,13 @@ python3 gen_sa_accounts.py --list-projects
 python3 gen_sa_accounts.py --enable-services $PROJECTID
 ```
 
-- Create Sevice Accounts to current project
+- Create Service Accounts to current project
 
 ```
 python3 gen_sa_accounts.py --create-sas $PROJECTID
 ```
 
-- Download Sevice Accounts as accounts folder
+- Download Service Accounts as accounts folder
 
 ```
 python3 gen_sa_accounts.py --download-keys $PROJECTID

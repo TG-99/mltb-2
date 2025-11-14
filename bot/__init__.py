@@ -10,7 +10,6 @@ from logging import (
     INFO,
     basicConfig,
     WARNING,
-    ERROR,
 )
 from sabnzbdapi import SabnzbdClient
 from time import time
@@ -18,7 +17,6 @@ from os import cpu_count
 
 getLogger("requests").setLevel(WARNING)
 getLogger("urllib3").setLevel(WARNING)
-getLogger("pyrogram").setLevel(ERROR)
 getLogger("httpx").setLevel(WARNING)
 getLogger("pymongo").setLevel(WARNING)
 getLogger("aiohttp").setLevel(WARNING)
@@ -37,7 +35,7 @@ basicConfig(
 LOGGER = getLogger(__name__)
 cpu_no = cpu_count()
 
-DOWNLOAD_DIR = "/usr/src/app/downloads/"
+DOWNLOAD_DIR = "/mltb/downloads/"
 intervals = {"status": {}, "qb": "", "jd": "", "nzb": "", "stopAll": False}
 qb_torrents = {}
 jd_downloads = {}

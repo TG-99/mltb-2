@@ -3,11 +3,11 @@ from asyncio import sleep, gather
 from os import walk, path as ospath
 from secrets import token_urlsafe
 from aioshutil import move, rmtree
-from pyrogram.enums import ChatAction
 from re import sub, I, findall
 from shlex import split
 from collections import Counter
 from copy import deepcopy
+from pytdbot.types import User, ChatActionTyping, ChatTypeSupergroup
 
 from .. import (
     user_data,
@@ -21,7 +21,7 @@ from .. import (
     DOWNLOAD_DIR,
 )
 from ..core.config_manager import Config
-from ..core.mltb_client import TgClient
+from ..core.telegram_client import TgManager
 from .ext_utils.bot_utils import new_task, sync_to_async, get_size_bytes
 from .ext_utils.bulk_links import extract_bulk_links
 from .mirror_leech_utils.gdrive_utils.list import GoogleDriveList
@@ -61,8 +61,7 @@ from .telegram_helper.message_utils import (
 class TaskConfig:
     def __init__(self):
         self.mid = self.message.id
-        self.user = self.message.from_user or self.message.sender_chat
-        self.user_id = self.user.id
+        self.user_id = self.message.from_id
         self.user_dict = user_data.get(self.user_id, {})
         self.dir = f"{DOWNLOAD_DIR}{self.mid}"
         self.up_dir = ""
@@ -116,11 +115,16 @@ class TaskConfig:
         self.progress = True
         self.ffmpeg_cmds = None
         self.chat_thread_id = None
+        self.message_link = None
         self.subproc = None
         self.thumb = None
         self.excluded_extensions = []
         self.files_to_proceed = []
-        self.is_super_chat = self.message.chat.type.name in ["SUPERGROUP", "CHANNEL"]
+        self.is_super_chat = False
+
+    async def check_chat_type(self):
+        chat = await self.message.getChat()
+        self.is_super_chat = isinstance(chat.type, ChatTypeSupergroup)
 
     def get_token_path(self, dest):
         if dest.startswith("mtp:"):
@@ -205,7 +209,7 @@ class TaskConfig:
                 if not is_gdrive_id(self.link):
                     raise ValueError(self.link)
 
-        self.user_transmission = TgClient.IS_PREMIUM_USER and (
+        self.user_transmission = TgManager.IS_PREMIUM_USER and (
             self.user_dict.get("USER_TRANSMISSION")
             or Config.USER_TRANSMISSION
             and "USER_TRANSMISSION" not in self.user_dict
@@ -328,7 +332,7 @@ class TaskConfig:
                     else None
                 )
             )
-            self.hybrid_leech = TgClient.IS_PREMIUM_USER and (
+            self.hybrid_leech = TgManager.IS_PREMIUM_USER and (
                 self.user_dict.get("HYBRID_LEECH")
                 or Config.HYBRID_LEECH
                 and "HYBRID_LEECH" not in self.user_dict
@@ -337,7 +341,7 @@ class TaskConfig:
                 self.user_transmission = False
                 self.hybrid_leech = False
             if self.user_trans:
-                self.user_transmission = TgClient.IS_PREMIUM_USER
+                self.user_transmission = TgManager.IS_PREMIUM_USER
             if self.up_dest:
                 if not isinstance(self.up_dest, int):
                     if self.up_dest.startswith("b:"):
@@ -346,10 +350,10 @@ class TaskConfig:
                         self.hybrid_leech = False
                     elif self.up_dest.startswith("u:"):
                         self.up_dest = self.up_dest.replace("u:", "", 1)
-                        self.user_transmission = TgClient.IS_PREMIUM_USER
+                        self.user_transmission = TgManager.IS_PREMIUM_USER
                     elif self.up_dest.startswith("h:"):
                         self.up_dest = self.up_dest.replace("h:", "", 1)
-                        self.user_transmission = TgClient.IS_PREMIUM_USER
+                        self.user_transmission = TgManager.IS_PREMIUM_USER
                         self.hybrid_leech = self.user_transmission
                     if "|" in self.up_dest:
                         self.up_dest, self.chat_thread_id = list(
@@ -365,14 +369,14 @@ class TaskConfig:
 
                 if self.user_transmission:
                     try:
-                        chat = await TgClient.user.get_chat(self.up_dest)
+                        chat = await TgManager.user.get_chat(self.up_dest)
                     except:
                         chat = None
                     if chat is None:
                         self.user_transmission = False
                         self.hybrid_leech = False
                     else:
-                        uploader_id = TgClient.user.me.id
+                        uploader_id = TgManager.user.me.id
                         if chat.type.name not in ["SUPERGROUP", "CHANNEL", "GROUP"]:
                             self.user_transmission = False
                             self.hybrid_leech = False
@@ -410,12 +414,13 @@ class TaskConfig:
                                 else:
                                     self.hybrid_leech = False
                         else:
-                            try:
-                                await self.client.send_chat_action(
-                                    self.up_dest, ChatAction.TYPING
+                            res = await self.client.sendChatAction(
+                                self.up_dest, ChatActionTyping
+                            )
+                            if res["@type"] != "ok":
+                                raise ValueError(
+                                    f"Start the bot and try again! Error: {res['message']}"
                                 )
-                            except:
-                                raise ValueError("Start the bot and try again!")
             elif (
                 self.user_transmission or self.hybrid_leech
             ) and not self.is_super_chat:
@@ -437,7 +442,7 @@ class TaskConfig:
                 and "EQUAL_SPLITS" not in self.user_dict
             )
             self.max_split_size = (
-                TgClient.MAX_SPLIT_SIZE if self.user_transmission else 2097152000
+                TgManager.MAX_SPLIT_SIZE if self.user_transmission else 2097152000
             )
             self.split_size = min(self.split_size, self.max_split_size)
 
@@ -476,20 +481,24 @@ class TaskConfig:
                 self.tag = " ".join(user_info[:-1])
             else:
                 self.tag, id_ = text[1].split("Tag: ")[1].split()
-            self.user = self.message.from_user = await self.client.get_users(int(id_))
-            self.user_id = self.user.id
-            self.user_dict = user_data.get(self.user_id, {})
+            self.user = await self.client.getUser(int(id_))
+            if not isinstance(self.user, User):
+                self.user = None
             try:
                 await self.message.unpin()
             except:
                 pass
         if self.user:
-            if username := self.user.username:
+            self.user_id = self.user.id
+            self.user_dict = user_data.get(self.user_id, {})
+            if username := self.user.usernames.editable_username:
                 self.tag = f"@{username}"
-            elif hasattr(self.user, "mention"):
-                self.tag = self.user.mention
+            elif hasattr(self.user, "first_name"):
+                self.tag = (
+                    f'<a href="tg://user?id={self.user_id}">{self.user.first_name}</a>'
+                )
             else:
-                self.tag = self.user.title
+                self.tag = "None"
 
     @new_task
     async def run_multi(self, input_list, obj):
@@ -521,21 +530,17 @@ class TaskConfig:
             msg = [s.strip() for s in input_list]
             index = msg.index("-i")
             msg[index + 1] = f"{self.multi - 1}"
-            nextmsg = await self.client.get_messages(
-                chat_id=self.message.chat.id,
-                message_ids=self.message.reply_to_message_id + 1,
+            nextmsg = await self.client.getMessage(
+                chat_id=self.message.chat_id,
+                message_id=self.message.reply_to_message_id + 1,
             )
             msgts = " ".join(msg)
             if self.multi > 2:
                 msgts += f"\nCancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
             nextmsg = await send_message(nextmsg, msgts)
-        nextmsg = await self.client.get_messages(
-            chat_id=self.message.chat.id, message_ids=nextmsg.id
+        nextmsg = await self.client.getMessage(
+            chat_id=self.message.chat_id, message_id=nextmsg.id
         )
-        if self.message.from_user:
-            nextmsg.from_user = self.user
-        else:
-            nextmsg.sender_chat = self.user
         if intervals["stopAll"]:
             return
         await obj(
@@ -549,6 +554,7 @@ class TaskConfig:
             self.bulk,
             self.multi_tag,
             self.options,
+            self.user,
         ).new_event()
 
     async def init_bulk(self, input_list, bulk_start, bulk_end, obj):
@@ -570,13 +576,9 @@ class TaskConfig:
                 multi_tags.add(self.multi_tag)
                 msg += f"\nCancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
             nextmsg = await send_message(self.message, msg)
-            nextmsg = await self.client.get_messages(
-                chat_id=self.message.chat.id, message_ids=nextmsg.id
+            nextmsg = await self.client.getMessage(
+                chat_id=self.message.chat_id, message_id=nextmsg.id
             )
-            if self.message.from_user:
-                nextmsg.from_user = self.user
-            else:
-                nextmsg.sender_chat = self.user
             await obj(
                 self.client,
                 nextmsg,
@@ -588,6 +590,7 @@ class TaskConfig:
                 self.bulk,
                 self.multi_tag,
                 self.options,
+                self.user,
             ).new_event()
         except Exception as e:
             await send_message(
