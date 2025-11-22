@@ -42,6 +42,7 @@ from ..mirror_leech_utils.status_utils.queue_status import QueueStatus
 from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from ..mirror_leech_utils.status_utils.telegram_status import TelegramStatus
 from ..mirror_leech_utils.telegram_uploader import TelegramUploader
+from ..mirror_leech_utils.status_utils.ddl_status import DDLStatus
 from ..telegram_helper.button_build import ButtonMaker
 from ..telegram_helper.message_utils import (
     send_message,
@@ -297,6 +298,16 @@ class TaskListener(TaskConfig):
                 tg.upload(),
             )
             del tg
+        elif self.is_ddl:
+            LOGGER.info(f"DDL Upload Name: {self.name}")
+            ddl = GoFileUpload(self, up_path)
+            async with task_dict_lock:
+                task_dict[self.mid] = DDLStatus(self, ddl, gid, "up")
+            await gather(
+                update_status_message(self.message.chat.id),
+                ddl.upload(),
+            )
+            del ddl
         elif is_gdrive_id(self.up_dest):
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
             drive = GoogleDriveUpload(self, up_path)

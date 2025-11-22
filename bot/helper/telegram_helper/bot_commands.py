@@ -43,3 +43,4 @@ class BotCommands:
     RssCommand = f"rss{i}"
     NzbSearchCommand = f"nzbsearch{i}"
     CleanDBCommand = f"cleandb{i}"
+    DDLCommand = f"ddl{i}"

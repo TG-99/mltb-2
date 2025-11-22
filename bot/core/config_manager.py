@@ -73,6 +73,8 @@ class Config:
     MEGA_PASSWORD = ""
     DDL_SERVERS = {}
     PROXY_URL = ""
+    GOFILE_API = ""
+    GOFILE_FOLDER_ID = ""
 
     @classmethod
     def _convert(cls, key: str, value):

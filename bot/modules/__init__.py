@@ -9,6 +9,7 @@ from .gd_count import count_node
 from .gd_delete import delete_file
 from .gd_search import gdrive_search, select_type
 from .help import arg_usage, bot_help
+from .ddl import ddl
 from .mirror_leech import (
     mirror,
     leech,
@@ -91,4 +92,5 @@ __all__ = [
     "ytdl_leech",
     "clean_database",
     "clean_database_update",
+    "ddl",
 ]
