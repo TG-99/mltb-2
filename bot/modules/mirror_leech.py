@@ -52,7 +52,7 @@ class Mirror(TaskListener):
         is_leech=False,
         is_jd=False,
         is_nzb=False,
-        is_ddl=False,
+        is_uphoster=False,
         same_dir=None,
         bulk=None,
         multi_tag=None,
@@ -73,7 +73,7 @@ class Mirror(TaskListener):
         self.is_leech = is_leech
         self.is_jd = is_jd
         self.is_nzb = is_nzb
-        self.is_ddl = is_ddl
+        self.is_uphoster = is_uphoster
 
     async def new_event(self):
         text = self.message.text.split("\n")
@@ -248,7 +248,7 @@ class Mirror(TaskListener):
                 self.is_leech,
                 self.is_jd,
                 self.is_nzb,
-                self.is_ddl,
+                self.is_uphoster,
                 self.same_dir,
                 self.bulk,
                 self.multi_tag,
