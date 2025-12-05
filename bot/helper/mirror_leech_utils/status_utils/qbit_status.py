@@ -7,6 +7,7 @@ from ...ext_utils.status_utils import (
     get_readable_file_size,
     get_readable_time,
 )
+from ....modules.stats import commands
 
 
 async def get_download(tag, old_info=None):
@@ -25,6 +26,7 @@ class QbittorrentStatus:
         self.listener = listener
         self._info = None
         self.tool = "qbittorrent"
+        self.engine = f"qBittorrent v{commands["qBittorrent"]}"
 
     async def update(self):
         self._info = await get_download(f"{self.listener.mid}", self._info)

@@ -1,3 +1,6 @@
+from os import environ
+from subprocess import Popen, run
+from time import time, sleep
 from aiofiles.os import path as aiopath, remove, makedirs
 from aiofiles import open as aiopen
 from aioshutil import rmtree
@@ -239,9 +242,25 @@ async def load_configurations():
     ).wait()
 
     if Config.BASE_URL:
+        domain = Config.BASE_URL.replace("https://", "").replace("http://", "")
+        nginx_conf_path = "web/nginx_config"
+        with open(nginx_conf_path, "r") as f:
+            nginx_conf = (
+                f.read()
+                .replace("8080 default_server;", f"{environ.get('PORT')} default_server;")
+                .replace("server_name _;", f"server_name {domain};")
+            )
+            with open("/etc/nginx/sites-enabled/default", "w") as f:
+                f.write(nginx_conf)
+            Popen(["nginx", "-g", "daemon off;"])
+            LOGGER.info("Nginx server started successfully!")
         await create_subprocess_shell(
             f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{Config.BASE_URL_PORT}"
         )
+
+    if Config.BASE_URL:
+        Popen(["python3", "alive.py"])
+        sleep(0.5)
 
     if await aiopath.exists("cfg.zip"):
         if await aiopath.exists("/JDownloader/cfg"):

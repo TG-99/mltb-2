@@ -40,6 +40,8 @@ async def rclone_serve_booter():
         "http",
         "--config",
         "rclone.conf",
+        "--baseurl",
+        "/rcl/",
         "--no-modtime",
         "combine:",
         "--addr",

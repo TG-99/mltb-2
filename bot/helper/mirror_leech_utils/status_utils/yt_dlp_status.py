@@ -3,6 +3,7 @@ from ...ext_utils.status_utils import (
     get_readable_file_size,
     get_readable_time,
 )
+from ....modules.stats import commands
 
 
 class YtDlpStatus:
@@ -11,6 +12,7 @@ class YtDlpStatus:
         self._gid = gid
         self.listener = listener
         self.tool = "yt-dlp"
+        self.engine = f"yt-dlp v{commands["yt-dlp"]}"
 
     def gid(self):
         return self._gid

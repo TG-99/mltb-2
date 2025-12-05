@@ -17,6 +17,7 @@ from ..helper.ext_utils.links_utils import (
     is_rclone_path,
     is_telegram_link,
     is_gdrive_id,
+    is_mega_link,
 )
 from ..helper.listeners.task_listener import TaskListener
 from ..helper.mirror_leech_utils.download_utils.aria2_download import (
@@ -39,6 +40,7 @@ from ..helper.mirror_leech_utils.download_utils.telegram_download import (
     TelegramDownloadHelper,
 )
 from ..helper.telegram_helper.message_utils import send_message, get_tg_link_message
+from ..helper.mirror_leech_utils.download_utils.mega_download import add_mega_download
 
 
 class Mirror(TaskListener):
@@ -294,6 +296,7 @@ class Mirror(TaskListener):
             and not is_rclone_path(self.link)
             and not is_gdrive_id(self.link)
             and not is_gdrive_link(self.link)
+            and not is_mega_link(self.link)
         ):
             await send_message(
                 self.message, COMMAND_USAGE["mirror"][0], COMMAND_USAGE["mirror"][1]
@@ -321,6 +324,7 @@ class Mirror(TaskListener):
             and not self.link.endswith(".torrent")
             and not is_tg_file
             and not is_gdrive_id(self.link)
+            and not is_mega_link(self.link)
         ):
             content_type = await get_content_type(self.link)
             if content_type is None or re_match(r"text/html|text/plain", content_type):
@@ -359,6 +363,11 @@ class Mirror(TaskListener):
             await add_rclone_download(self, f"{path}/")
         elif is_gdrive_link(self.link) or is_gdrive_id(self.link):
             await add_gd_download(self, path)
+        elif is_mega_link(self.link):
+            await add_mega_download(
+                self,
+                f"{path}/"
+            )
         else:
             ussr = args["-au"]
             pssw = args["-ap"]

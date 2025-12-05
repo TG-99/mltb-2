@@ -832,5 +832,8 @@ def add_job():
     )
 
 
-add_job()
-scheduler.start()
+if Config.RSS_CHAT:
+    add_job()
+    scheduler.start()
+
+

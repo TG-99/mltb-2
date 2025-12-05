@@ -1,4 +1,5 @@
 from ...ext_utils.status_utils import MirrorStatus
+from ....modules.stats import commands
 
 
 class RcloneStatus:
@@ -8,6 +9,7 @@ class RcloneStatus:
         self._status = status
         self.listener = listener
         self.tool = "rclone"
+        self.engine = f"Rclone v{commands["rclone"]}"
 
     def gid(self):
         return self._gid

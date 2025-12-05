@@ -213,5 +213,41 @@ class DbManager:
             return
         await self.db[name][TgManager.ID].drop()
 
+# Database Cleaner by RIR18
+    async def config_dict(self):
+        if self._return:
+            return
+        await self.db.settings.config.find_one({"_id": TgManager.ID})
+        self._conn.close
+
+    async def clean_database(self):
+        if self._return:
+            return
+        await self._conn.drop_database('mltb')
+        self._conn.close
+
+    async def clean_allconfig(self):
+        if self._return:
+            return
+        await self.db.settings.config.drop()
+        self._conn.close
+
+    async def clean_config(self, dict_):
+        if self._return:
+            return
+        await self.db.settings.config.delete_one({'_id': TgManager.ID})
+        self._conn.close
+
+    async def clean_all_private_files(self):
+        if self._return:
+            return
+        await self.db.settings.files.drop()
+        self._conn.close
+
+    async def clean_private_files(self, dict_):
+        if self._return:
+            return
+        await self.db.settings.files.delete_one({'_id': TgManager.ID})
+        self._conn.close
 
 database = DbManager()

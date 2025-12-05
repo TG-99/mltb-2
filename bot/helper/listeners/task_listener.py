@@ -1,3 +1,4 @@
+from time import time
 from aiofiles.os import path as aiopath, listdir, remove
 from asyncio import sleep, gather
 from html import escape
@@ -31,7 +32,7 @@ from ..ext_utils.files_utils import (
     move_and_merge,
 )
 from ..ext_utils.links_utils import is_gdrive_id
-from ..ext_utils.status_utils import get_readable_file_size
+from ..ext_utils.status_utils import get_readable_file_size, get_readable_time
 from ..ext_utils.task_manager import start_from_queued, check_running_tasks
 from ..mirror_leech_utils.gdrive_utils.upload import GoogleDriveUpload
 from ..mirror_leech_utils.rclone_utils.transfer import RcloneTransferHelper
@@ -40,6 +41,8 @@ from ..mirror_leech_utils.status_utils.queue_status import QueueStatus
 from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from ..mirror_leech_utils.status_utils.telegram_status import TelegramStatus
 from ..mirror_leech_utils.telegram_uploader import TelegramUploader
+from ..mirror_leech_utils.status_utils.ddl_status import DDLStatus
+from ..mirror_leech_utils.ddl_utils.ddlEngine import DDLUploader
 from ..telegram_helper.button_build import ButtonMaker
 from ..telegram_helper.message_utils import (
     send_message,
@@ -295,6 +298,18 @@ class TaskListener(TaskConfig):
                 sync_to_async(drive.upload),
             )
             del drive
+        elif self.up_dest == "ddl":
+            size = await get_path_size(up_path)
+            LOGGER.info(f"Upload Name: {self.name} via DDL")
+            ddl = DDLUploader(self, self.name, up_dir)
+            ddl_upload_status = DDLStatus(self, ddl, size, gid, "up")
+            async with task_dict_lock:
+                task_dict[self.mid] = ddl_upload_status
+            await gather(
+                update_status_message(self.message.chat_id),
+                ddl.upload(self.name, size),
+            )
+            del ddl
         else:
             LOGGER.info(f"Rclone Upload Name: {self.name}")
             RCTransfer = RcloneTransferHelper(self)
@@ -316,13 +331,14 @@ class TaskListener(TaskConfig):
             and Config.DATABASE_URL
         ):
             await database.rm_complete_task(self.message_link)
-        msg = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}"
+        msg = f"<b>┌ Name: </b><code>{escape(self.name)}</code>\n<b>├ Size: </b>{get_readable_file_size(self.size)}"
+        msg += f"\n<b>├ Elapsed</b>: {get_readable_time(time() - self.message.date.timestamp())}"
         LOGGER.info(f"Task Done: {self.name}")
         if self.is_leech:
-            msg += f"\n<b>Total Files: </b>{folders}"
+            msg += f"\n<b>├ Total Files: </b>{folders}"
             if mime_type != 0:
-                msg += f"\n<b>Corrupted Files: </b>{mime_type}"
-            msg += f"\n<b>cc: </b>{self.tag}\n\n"
+                msg += f"\n<b>├ Corrupted Files: </b>{mime_type}"
+            msg += f"\n<b>└ cc: </b>{self.tag}\n\n"
             if not files:
                 await send_message(self.message, msg)
             else:
@@ -336,10 +352,10 @@ class TaskListener(TaskConfig):
                 if fmsg != "":
                     await send_message(self.message, msg + fmsg)
         else:
-            msg += f"\n\n<b>Type: </b>{mime_type}"
+            msg += f"\n<b>├ Type: </b>{mime_type}"
             if mime_type == "Folder":
-                msg += f"\n<b>SubFolders: </b>{folders}"
-                msg += f"\n<b>Files: </b>{files}"
+                msg += f"\n<b>├ SubFolders: </b>{folders}"
+                msg += f"\n<b>├ Files: </b>{files}"
             if (
                 link
                 or rclone_path
@@ -347,10 +363,13 @@ class TaskListener(TaskConfig):
                 and not self.private_link
             ):
                 buttons = ButtonMaker()
-                if link:
+                if (is_DDL := isinstance(link, dict)):
+                    for ddlserver, dlink in link.items():
+                        buttons.url_button(f"🚀 {ddlserver} Link", dlink)
+                elif link:
                     buttons.url_button("☁️ Cloud Link", link)
                 else:
-                    msg += f"\n\nPath: <code>{rclone_path}</code>"
+                    msg += f"\n<b>├ Path: </b><code>{rclone_path}</code>"
                 if rclone_path and Config.RCLONE_SERVE_URL and not self.private_link:
                     remote, rpath = rclone_path.split(":", 1)
                     url_path = rutils.quote(f"{rpath}")
@@ -358,7 +377,7 @@ class TaskListener(TaskConfig):
                     if mime_type == "Folder":
                         share_url += "/"
                     buttons.url_button("🔗 Rclone Link", share_url)
-                if not rclone_path and dir_id:
+                if not rclone_path and dir_id and not is_DDL:
                     INDEX_URL = ""
                     if self.private_link:
                         INDEX_URL = self.user_dict.get("INDEX_URL", "") or ""
@@ -372,9 +391,9 @@ class TaskListener(TaskConfig):
                             buttons.url_button("🌐 View Link", share_urls)
                 button = buttons.build_menu(2)
             else:
-                msg += f"\n\nPath: <code>{rclone_path}</code>"
+                msg += f"\n├ Path: <code>{rclone_path}</code>"
                 button = None
-            msg += f"\n\n<b>cc: </b>{self.tag}"
+            msg += f"\n<b>└ cc: </b>{self.tag}"
             await send_message(self.message, msg, button)
         if self.seed:
             await clean_target(self.up_dir)

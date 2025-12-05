@@ -11,6 +11,7 @@ class DirectStatus:
         self._obj = obj
         self.listener = listener
         self.tool = "aria2"
+        self.engine = "Direct_link_generator"
 
     def gid(self):
         return self._gid

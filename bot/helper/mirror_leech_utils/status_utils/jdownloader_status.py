@@ -7,6 +7,9 @@ from ...ext_utils.status_utils import (
     get_readable_file_size,
     get_readable_time,
 )
+import subprocess
+
+eng = subprocess.check_output(['java', '--version']).decode().split('\n')[0].strip()
 
 
 def _get_combined_info(result, old_info):
@@ -73,6 +76,7 @@ class JDownloaderStatus:
         self._gid = gid
         self._info = {}
         self.tool = "jdownloader"
+        self.engine = eng
 
     async def _update(self):
         self._info = await get_download(self._gid, self._info)

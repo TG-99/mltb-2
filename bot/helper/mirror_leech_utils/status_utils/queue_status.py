@@ -9,6 +9,7 @@ class QueueStatus:
         self._gid = gid
         self._status = status
         self.tool = "system"
+        self.engine = "Queue System"
 
     def gid(self):
         return self._gid

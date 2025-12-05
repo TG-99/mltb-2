@@ -59,12 +59,16 @@ class Config:
     TORRENT_TIMEOUT = 0
     UPLOAD_PATHS = {}
     UPSTREAM_REPO = ""
-    UPSTREAM_BRANCH = "master"
+    UPSTREAM_BRANCH = "main"
     USENET_SERVERS = []
     USER_TRANSMISSION = False
     USE_SERVICE_ACCOUNTS = False
     WEB_PINCODE = False
     YT_DLP_OPTIONS = {}
+    MEGA_EMAIL = ""
+    MEGA_PASSWORD = ""
+    DDL_SERVERS = {}
+    PROXY_URL = ""
 
     @classmethod
     def _convert(cls, key: str, value):
@@ -146,8 +150,8 @@ class Config:
         if isinstance(converted_value, str):
             converted_value = converted_value.strip()
 
-        if attr == "DEFAULT_UPLOAD" and converted_value != "gd":
-            return "rc"
+        if attr == "DEFAULT_UPLOAD" and converted_value != "rc" and converted_value != "ddl":
+            return "gd"
 
         if attr in {
             "BASE_URL",

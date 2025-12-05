@@ -7,6 +7,7 @@ from ...ext_utils.status_utils import (
     get_readable_time,
     time_to_seconds,
 )
+from ....modules.stats import commands
 
 
 async def get_download(nzo_id, old_info=None):
@@ -61,6 +62,7 @@ class SabnzbdStatus:
         self._gid = gid
         self._info = None
         self.tool = "sabnzbd"
+        self.engine = f"SABnzbd+ v{commands["SABnzbd+"]}"
 
     async def update(self):
         self._info = await get_download(self._gid, self._info)

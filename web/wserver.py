@@ -244,9 +244,7 @@ async def set_aria2(gid, selected_files):
 @app.get("/", response_class=HTMLResponse)
 async def homepage():
     return (
-        "<h1>See mirror-leech-telegram-bot "
-        "<a href='https://www.github.com/anasty17/mirror-leech-telegram-bot'>@GitHub</a> "
-        "By <a href='https://github.com/anasty17'>Anas</a></h1>"
+        "<h1>This is mirror-leech-telegram-bot modified by <a href='https://github.com/RIR18'>RIR18</a></h1><br><br><h3><a href='/downloads/' target='_blank'>Download Folder</a><br><a href='/downloads/log.txt' target='_blank'>MLTB Log</a><br><br><a href='/rcl/' target='_blank'>Rclone Index</a><br><br><a href='/qbt/' target='_blank'>qBittorrent</a><br><a href='/sabnzbd/' target='_blank'>Usernet</a><br><br><a href='https://gdrive.blacktape.ggff.net' target='_blank'>Index Link</a><br><a href='https://gdrive-r.rir18.workers.dev' target='_blank'>Index Link-R</a><br><br><a href='https://webui9.blacktape.ggff.net' target='_blank'>WebUI</a></h3>"
     )
 
 

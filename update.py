@@ -30,6 +30,19 @@ basicConfig(
     level=INFO,
 )
 
+CONFIG_FILE_URL = environ.get("CONFIG_FILE_URL", '')
+if len(CONFIG_FILE_URL) != 0:
+    try:
+        res = rget(CONFIG_FILE_URL)
+        if res.status_code == 200:
+            log_info('Successfully downloaded config.py')
+            with open("config.py", "wb+") as f:
+                f.write(res.content)
+        else:
+            log_error(f"Failed to download config.py {res.status_code}")
+    except Exception as e:
+        log_error(f"CONFIG_FILE_URL: {e}")
+
 settings = import_module("config")
 config_file = {
     key: value.strip() if isinstance(value, str) else value
@@ -61,7 +74,7 @@ if DATABASE_URL := config_file.get("DATABASE_URL", "").strip():
 
 UPSTREAM_REPO = config_file.get("UPSTREAM_REPO", "").strip()
 
-UPSTREAM_BRANCH = config_file.get("UPSTREAM_BRANCH", "").strip() or "master"
+UPSTREAM_BRANCH = config_file.get("UPSTREAM_BRANCH", "").strip() or "main"
 
 if UPSTREAM_REPO:
     if path.exists(".git"):
