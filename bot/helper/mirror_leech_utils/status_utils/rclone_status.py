@@ -1,7 +1,5 @@
 from ...ext_utils.status_utils import MirrorStatus
-import subprocess
-
-eng = subprocess.check_output(['rclone', 'version']).decode().split('\n')[0].strip()
+from ....modules.stats import commands
 
 
 class RcloneStatus:
@@ -11,7 +9,7 @@ class RcloneStatus:
         self._status = status
         self.listener = listener
         self.tool = "rclone"
-        self.engine = eng
+        self.engine = f"Rclone v{commands["rclone"]}"
 
     def gid(self):
         return self._gid

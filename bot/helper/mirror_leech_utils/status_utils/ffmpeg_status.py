@@ -4,6 +4,7 @@ from ...ext_utils.status_utils import (
     MirrorStatus,
     get_readable_time,
 )
+from ....modules.stats import commands
 
 
 class FFmpegStatus:
@@ -13,7 +14,7 @@ class FFmpegStatus:
         self._gid = gid
         self._cstatus = status
         self.tool = "ffmpeg"
-        self.engine = "FFmpeg"
+        self.engine = f"FFmpeg v{commands["ffmpeg"]}"
 
     def speed(self):
         return f"{get_readable_file_size(self._obj.speed_raw)}/s"

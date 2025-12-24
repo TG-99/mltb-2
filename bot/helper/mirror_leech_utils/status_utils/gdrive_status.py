@@ -3,9 +3,7 @@ from ....helper.ext_utils.status_utils import (
     get_readable_file_size,
     get_readable_time,
 )
-from pkg_resources import get_distribution
-
-eng = f"Google Api v{get_distribution('google-api-python-client').version}"
+from importlib.metadata import version
 
 
 class GoogleDriveStatus:
@@ -16,7 +14,7 @@ class GoogleDriveStatus:
         self._gid = gid
         self._status = status
         self.tool = "gDriveApi"
-        self.engine = eng
+        self.engine = f"Google Api v{version("google-api-python-client")}"
 
     def processed_bytes(self):
         return get_readable_file_size(self._obj.processed_bytes)

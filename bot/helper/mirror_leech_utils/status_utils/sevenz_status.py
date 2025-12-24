@@ -6,6 +6,7 @@ from ...ext_utils.status_utils import (
     MirrorStatus,
     get_readable_time,
 )
+from ....modules.stats import commands
 
 
 class SevenZStatus:
@@ -16,7 +17,7 @@ class SevenZStatus:
         self._start_time = time()
         self._cstatus = status
         self.tool = "7z"
-        self.engine = "p7zip"
+        self.engine = f"7z v{commands["7z"]}"
 
     def gid(self):
         return self._gid

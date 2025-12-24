@@ -7,6 +7,7 @@ from ...ext_utils.status_utils import (
     get_readable_time,
     get_readable_file_size,
 )
+from ....modules.stats import commands
 
 
 async def get_download(gid, old_info=None):
@@ -27,7 +28,7 @@ class Aria2Status:
         self.start_time = 0
         self.seeding = seeding
         self.tool = "aria2"
-        self.engine = "Aria2"
+        self.engine = f"Aria2c v{commands["aria2"]}"
 
     async def update(self):
         self._download = await get_download(self._gid, self._download)

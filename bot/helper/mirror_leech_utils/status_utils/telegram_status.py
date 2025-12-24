@@ -3,9 +3,7 @@ from ...ext_utils.status_utils import (
     get_readable_file_size,
     get_readable_time,
 )
-from pkg_resources import get_distribution
-
-eng = f"Pyrofork v{get_distribution('pyrofork').version}"
+from importlib.metadata import version
 
 
 class TelegramStatus:
@@ -16,7 +14,7 @@ class TelegramStatus:
         self._gid = gid
         self._status = status
         self.tool = "telegram"
-        self.engine = eng
+        self.engine = f"kurigram v{version("kurigram")}"
 
     def processed_bytes(self):
         return get_readable_file_size(self._obj.processed_bytes)
