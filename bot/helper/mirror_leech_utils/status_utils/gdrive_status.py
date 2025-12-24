@@ -8,7 +8,7 @@ from pkg_resources import get_distribution
 eng = f"Google Api v{get_distribution('google-api-python-client').version}"
 
 
-class GdriveStatus:
+class GoogleDriveStatus:
     def __init__(self, listener, obj, gid, status):
         self.listener = listener
         self._obj = obj

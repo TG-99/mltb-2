@@ -21,26 +21,30 @@ from bot import (
     bot,
     botStartTime,
     LOGGER,
-    Intervals,
-    DATABASE_URL,
-    INCOMPLETE_TASK_NOTIFIER,
+    intervals,
+    config_dict,
     scheduler,
     sabnzbd_client,
     config_dict,
     alive,
 )
-from .helper.ext_utils.bot_utils import cmd_exec, sync_to_async, create_help_buttons
-from .helper.ext_utils.db_handler import DbManager
+from .helper.ext_utils.telegraph_helper import telegraph
+from .helper.ext_utils.bot_utils import (
+    cmd_exec,
+    sync_to_async,
+    create_help_buttons,
+    new_task,
+)
+from .helper.ext_utils.db_handler import database
 from .helper.ext_utils.files_utils import clean_all, exit_clean_up
 from .helper.ext_utils.jdownloader_booter import jdownloader
 from .helper.ext_utils.status_utils import get_readable_file_size, get_readable_time
-from .helper.ext_utils.telegraph_helper import telegraph
 from .helper.listeners.aria2_listener import start_aria2_listener
 from .helper.mirror_leech_utils.rclone_utils.serve import rclone_serve_booter
 from .helper.telegram_helper.bot_commands import BotCommands
 from .helper.telegram_helper.button_build import ButtonMaker
 from .helper.telegram_helper.filters import CustomFilters
-from .helper.telegram_helper.message_utils import sendMessage, editMessage, sendFile
+from .helper.telegram_helper.message_utils import send_message, edit_message, send_file
 from .modules import (
     authorize,
     cancel_task,
@@ -52,18 +56,17 @@ from .modules import (
     gd_search,
     mirror_leech,
     status,
-    torrent_search,
     ytdlp,
-    rss,
     shell,
     users_settings,
     bot_settings,
     help,
     force_start,
     cleandb,
-)  # noqa: F401
+)
 
 
+@new_task
 async def stats(_, message):
     if await aiopath.exists(".git"):
         last_commit = await cmd_exec(
@@ -93,40 +96,42 @@ async def stats(_, message):
         f"<b>├ Memory Free:</b> {get_readable_file_size(memory.available)}\n"
         f"<b>└ Memory Used:</b> {get_readable_file_size(memory.used)}\n"
     )
-    await sendMessage(message, stats)
+    await send_message(message, stats)
 
 
+@new_task
 async def start(client, message):
     buttons = ButtonMaker()
-    buttons.ubutton("GD Index", "https://gdrive.blactape75.tech")
-    buttons.ubutton("Web Server", f"{config_dict['BASE_URL']}")
+    buttons.url_button("GD Index", "https://gdrive.blactape75.tech")
+    buttons.url_button("Web Server", f"{config_dict['BASE_URL']}")
     reply_markup = buttons.build_menu(2)
     if await CustomFilters.authorized(client, message):
         start_string = f"""
 This bot can mirror all your links|files|torrents to Google Drive or any rclone cloud or to telegram.
 Type /{BotCommands.HelpCommand} to get a list of available commands
 """
-        await sendMessage(message, start_string, reply_markup)
+        await send_message(message, start_string, reply_markup)
     else:
-        await sendMessage(
+        await send_message(
             message,
             "You Are not authorized user! Deploy your own mirror-leech bot",
             reply_markup,
         )
 
 
+@new_task
 async def restart(_, message):
-    Intervals["stopAll"] = True
-    restart_message = await sendMessage(message, "Restarting...")
+    intervals["stopAll"] = True
+    restart_message = await send_message(message, "Restarting...")
     if scheduler.running:
         scheduler.shutdown(wait=False)
-    if qb := Intervals["qb"]:
+    if qb := intervals["qb"]:
         qb.cancel()
-    if jd := Intervals["jd"]:
+    if jd := intervals["jd"]:
         jd.cancel()
-    if nzb := Intervals["nzb"]:
+    if nzb := intervals["nzb"]:
         nzb.cancel()
-    if st := Intervals["status"]:
+    if st := intervals["status"]:
         for intvl in list(st.values()):
             intvl.cancel()
     await sync_to_async(clean_all)
@@ -149,15 +154,17 @@ async def restart(_, message):
     osexecl(executable, executable, "-m", "bot")
 
 
+@new_task
 async def ping(_, message):
     start_time = int(round(time() * 1000))
-    reply = await sendMessage(message, "Starting Ping")
+    reply = await send_message(message, "Starting Ping")
     end_time = int(round(time() * 1000))
-    await editMessage(reply, f"{end_time - start_time} ms")
+    await edit_message(reply, f"{end_time - start_time} ms")
 
 
+@new_task
 async def log(_, message):
-    await sendFile(message, "log.txt")
+    await send_file(message, "log.txt")
 
 
 help_string = f"""
@@ -202,8 +209,9 @@ NOTE: Try each command without any argument to see more detalis.
 """
 
 
+@new_task
 async def bot_help(_, message):
-    await sendMessage(message, help_string)
+    await send_message(message, help_string)
 
 
 async def restart_notification():
@@ -230,8 +238,8 @@ async def restart_notification():
         except Exception as e:
             LOGGER.error(e)
 
-    if INCOMPLETE_TASK_NOTIFIER and DATABASE_URL:
-        if notifier_dict := await DbManager().get_incomplete_tasks():
+    if config_dict["INCOMPLETE_TASK_NOTIFIER"] and config_dict["DATABASE_URL"]:
+        if notifier_dict := await database.get_incomplete_tasks():
             for cid, data in notifier_dict.items():
                 msg = "Restarted Successfully!" if cid == chat_id else "Bot Restarted!"
                 for tag, links in data.items():
@@ -255,12 +263,12 @@ async def restart_notification():
 
 
 async def main():
-    if DATABASE_URL:
-        await DbManager().db_load()
-    jdownloader.initiate()
+    if config_dict["DATABASE_URL"]:
+        await database.db_load()
     await gather(
+        jdownloader.initiate(),
         sync_to_async(clean_all),
-        torrent_search.initiate_search_tools(),
+        bot_settings.initiate_search_tools(),
         restart_notification(),
         telegraph.create_account(),
         rclone_serve_booter(),

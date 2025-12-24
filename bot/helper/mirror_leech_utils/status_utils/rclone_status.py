@@ -1,4 +1,4 @@
-from bot.helper.ext_utils.status_utils import MirrorStatus
+from ...ext_utils.status_utils import MirrorStatus
 import subprocess
 
 eng = subprocess.check_output(['rclone', 'version']).decode().split('\n')[0].strip()
