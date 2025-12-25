@@ -11,10 +11,11 @@ from logging import (
     ERROR,
 )
 from requests import get as rget
-from os import path, remove, environ
+from os import path, remove, getenv, environ
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from subprocess import run as srun
+from typing import Dict, Any
 
 getLogger("pymongo").setLevel(ERROR)
 
@@ -44,13 +45,28 @@ if len(CONFIG_FILE_URL) != 0:
     except Exception as e:
         log_error(f"CONFIG_FILE_URL: {e}")
 
-settings = import_module("config")
-config_file = {
-    key: value.strip() if isinstance(value, str) else value
-    for key, value in vars(settings).items()
-    if not key.startswith("__")
-}
+def load_config() -> Dict[str, Any]:
+    """Load configuration from config module or environment variables."""
+    try:
+        # Try to load from config module first
+        settings = import_module("config")
+        config_file = {key: value.strip() if isinstance(value, str) else value for key, value in vars(settings).items() if not key.startswith("__")}
+        return config_file
+    except ModuleNotFoundError:
+        # Fallback to environment variables
+        log_info("Config module not found, loading from environment variables...")
+        return {
+            "BOT_TOKEN": getenv("BOT_TOKEN", ""),
+            "DATABASE_URL": getenv("DATABASE_URL", ""),
+            "UPSTREAM_REPO": getenv("UPSTREAM_REPO", ""),
+            "UPSTREAM_BRANCH": getenv("UPSTREAM_BRANCH", "master"),
+        }
 
+
+# Load configuration
+config_file = load_config()
+
+# Validate BOT_TOKEN
 BOT_TOKEN = config_file.get("BOT_TOKEN", "")
 if not BOT_TOKEN:
     log_error("BOT_TOKEN variable is missing! Exiting now")
@@ -62,10 +78,8 @@ if DATABASE_URL := config_file.get("DATABASE_URL", "").strip():
     try:
         conn = MongoClient(DATABASE_URL, server_api=ServerApi("1"))
         db = conn.mltb
-        old_config = db.settings.deployConfig.find_one({"_id": BOT_ID})
+        old_config = db.settings.deployConfig.find_one({"_id": BOT_ID}, {"_id": 0})
         config_dict = db.settings.config.find_one({"_id": BOT_ID})
-        if old_config is not None:
-            del old_config["_id"]
         if (
             old_config is not None and old_config == config_file or old_config is None
         ) and config_dict is not None:

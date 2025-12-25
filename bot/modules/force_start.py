@@ -34,7 +34,7 @@ async def remove_from_queue(_, message):
     elif len(msg) in {1, 2}:
         msg = f"""Reply to an active Command message which was used to start the download/upload.
 <code>/{BotCommands.ForceStartCommand[0]}</code> fd (to remove it from download queue) or fu (to remove it from upload queue) or nothing to start remove it from both download and upload queue.
-Also send <code>/{BotCommands.ForceStartCommand[0]} GID</code> fu|fd or obly gid to force start by removeing the task rom queue!
+Also send <code>/{BotCommands.ForceStartCommand[0]} GID</code> fu|fd or obly gid to force start by removing the task rom queue!
 Examples:
 <code>/{BotCommands.ForceStartCommand[1]}</code> GID fu (force upload)
 <code>/{BotCommands.ForceStartCommand[1]}</code> GID (force download and upload)
@@ -47,7 +47,7 @@ By reply to task cmd:
     if (
         Config.OWNER_ID != user_id
         and task.listener.user_id != user_id
-        and (user_id not in user_data or not user_data[user_id].get("is_sudo"))
+        and (user_id not in user_data or not user_data[user_id].get("SUDO"))
     ):
         await send_message(message, "This task is not for you!")
         return

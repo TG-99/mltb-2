@@ -1,8 +1,7 @@
 from time import time
 
-from .... import LOGGER, jd_lock, jd_downloads
-from ...ext_utils.bot_utils import async_to_sync
-from ...ext_utils.jdownloader_booter import jdownloader
+from .... import LOGGER, jd_listener_lock, jd_downloads
+from ....core.jdownloader_booter import jdownloader
 from ...ext_utils.status_utils import (
     MirrorStatus,
     get_readable_file_size,
@@ -76,6 +75,7 @@ class JDownloaderStatus:
         self.listener = listener
         self._gid = gid
         self._info = {}
+        self.tool = "jdownloader"
         self.engine = eng
 
     async def _update(self):
@@ -94,7 +94,11 @@ class JDownloaderStatus:
         return f"{get_readable_file_size(self._info.get('speed', 0))}/s"
 
     def name(self):
-        return self._info.get("name") or self.listener.name
+        return (
+            self._info.get("name").strip("/").split("/")[0]
+            if self._info.get("name")
+            else self.listener.name
+        )
 
     def size(self):
         return get_readable_file_size(self._info.get("bytesTotal", 0))
@@ -102,8 +106,8 @@ class JDownloaderStatus:
     def eta(self):
         return get_readable_time(eta) if (eta := self._info.get("eta", False)) else "-"
 
-    def status(self):
-        async_to_sync(self._update)
+    async def status(self):
+        await self._update()
         state = self._info.get("status", "jdlimit").capitalize()
         if len(state) == 0:
             if self._info.get("bytesLoaded", 0) == 0:
@@ -124,6 +128,6 @@ class JDownloaderStatus:
         await jdownloader.device.downloads.remove_links(
             package_ids=jd_downloads[self._gid]["ids"]
         )
-        async with jd_lock:
+        async with jd_listener_lock:
             del jd_downloads[self._gid]
         await self.listener.on_download_error("Cancelled by user!")

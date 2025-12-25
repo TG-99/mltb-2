@@ -5,7 +5,6 @@ from .... import (
     task_dict,
     task_dict_lock,
 )
-from ...ext_utils.bot_utils import sync_to_async
 from ...ext_utils.task_manager import check_running_tasks, stop_duplicate_check
 from ...listeners.direct_listener import DirectListener
 from ...mirror_leech_utils.status_utils.direct_status import DirectStatus
@@ -36,7 +35,7 @@ async def add_direct_download(listener, path):
         async with task_dict_lock:
             task_dict[listener.mid] = QueueStatus(listener, gid, "dl")
         await listener.on_download_start()
-        if listener.multi <= 1:
+        if listener.multi <= 1 and not listener.is_rss:
             await send_status_message(listener.message)
         await event.wait()
         if listener.is_cancelled:
@@ -55,7 +54,7 @@ async def add_direct_download(listener, path):
     else:
         LOGGER.info(f"Download from Direct Download: {listener.name}")
         await listener.on_download_start()
-        if listener.multi <= 1:
+        if listener.multi <= 1 and not listener.is_rss:
             await send_status_message(listener.message)
 
-    await sync_to_async(directListener.download, contents)
+    await directListener.download(contents)

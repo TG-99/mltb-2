@@ -3,25 +3,26 @@ from pyrogram.errors import FloodWait, FloodPremiumWait
 from re import match as re_match
 from time import time
 
-from ... import LOGGER, status_dict, task_dict_lock, intervals
+from ... import LOGGER, status_dict, task_dict_lock, intervals, DOWNLOAD_DIR
 from ...core.config_manager import Config
-from ...core.mltb_client import TgClient
+from ...core.telegram_manager import TgClient
 from ..ext_utils.bot_utils import SetInterval
 from ..ext_utils.exceptions import TgLinkException
 from ..ext_utils.status_utils import get_readable_message
 
 
-async def send_message(message, text, buttons=None):
+async def send_message(message, text, buttons=None, block=True):
     try:
         return await message.reply(
             text=text,
             quote=True,
-            disable_web_page_preview=True,
             disable_notification=True,
             reply_markup=buttons,
         )
     except FloodWait as f:
         LOGGER.warning(str(f))
+        if not block:
+            return str(f)
         await sleep(f.value * 1.2)
         return await send_message(message, text, buttons)
     except Exception as e:
@@ -29,15 +30,16 @@ async def send_message(message, text, buttons=None):
         return str(e)
 
 
-async def edit_message(message, text, buttons=None):
+async def edit_message(message, text, buttons=None, block=True):
     try:
         return await message.edit(
             text=text,
-            disable_web_page_preview=True,
             reply_markup=buttons,
         )
     except FloodWait as f:
         LOGGER.warning(str(f))
+        if not block:
+            return str(f)
         await sleep(f.value * 1.2)
         return await edit_message(message, text, buttons)
     except Exception as e:
@@ -65,7 +67,6 @@ async def send_rss(text, chat_id, thread_id):
         return await app.send_message(
             chat_id=chat_id,
             text=text,
-            disable_web_page_preview=True,
             message_thread_id=thread_id,
             disable_notification=True,
         )
@@ -169,17 +170,11 @@ async def get_tg_link_message(link):
             return (links, "user") if links else (user_message, "user")
     else:
         raise TgLinkException("Private: Please report!")
-    
 
-async def check_permission(client, chat, uploader_id, up_dest):
-    member = await chat.get_member(uploader_id)
-    if (
-        not member.privileges.can_manage_chat
-        or not member.privileges.can_delete_messages
-    ):
-        raise ValueError(
-            "You don't have enough privileges in this chat!"
-        )
+
+async def temp_download(msg):
+    path = f"{DOWNLOAD_DIR}temp"
+    return await msg.download(file_name=f"{path}/")
 
 
 async def update_status_message(sid, force=False):
@@ -207,22 +202,21 @@ async def update_status_message(sid, force=False):
                 obj.cancel()
                 del intervals["status"][sid]
             return
-        old_message = status_dict[sid]["message"]
-    if text != old_message.text:
-        message = await edit_message(old_message, text, buttons)
-        if isinstance(message, str):
-            if message.startswith("Telegram says: [40"):
-                async with task_dict_lock:
+        if text != status_dict[sid]["message"].text:
+            message = await edit_message(
+                status_dict[sid]["message"], text, buttons, block=False
+            )
+            if isinstance(message, str):
+                if message.startswith("Telegram says: [40"):
                     del status_dict[sid]
                     if obj := intervals["status"].get(sid):
                         obj.cancel()
                         del intervals["status"][sid]
-            else:
-                LOGGER.error(
-                    f"Status with id: {sid} haven't been updated. Error: {message}"
-                )
-            return
-        async with task_dict_lock:
+                else:
+                    LOGGER.error(
+                        f"Status with id: {sid} haven't been updated. Error: {message}"
+                    )
+                return
             status_dict[sid]["message"].text = text
             status_dict[sid]["time"] = time()
 
@@ -246,21 +240,21 @@ async def send_status_message(msg, user_id=0):
                     obj.cancel()
                     del intervals["status"][sid]
                 return
-            message = status_dict[sid]["message"]
-            await delete_message(message)
-            message = await send_message(msg, text, buttons)
+            old_message = status_dict[sid]["message"]
+            message = await send_message(msg, text, buttons, block=False)
             if isinstance(message, str):
                 LOGGER.error(
                     f"Status with id: {sid} haven't been sent. Error: {message}"
                 )
                 return
+            await delete_message(old_message)
             message.text = text
             status_dict[sid].update({"message": message, "time": time()})
         else:
             text, buttons = await get_readable_message(sid, is_user)
             if text is None:
                 return
-            message = await send_message(msg, text, buttons)
+            message = await send_message(msg, text, buttons, block=False)
             if isinstance(message, str):
                 LOGGER.error(
                     f"Status with id: {sid} haven't been sent. Error: {message}"

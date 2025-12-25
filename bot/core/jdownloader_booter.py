@@ -4,10 +4,10 @@ from json import dump
 from random import randint
 from re import match
 
-from ... import LOGGER
-from ...core.mltb_client import TgClient
-from ...core.config_manager import Config
-from .bot_utils import cmd_exec, new_task
+from .. import LOGGER
+from ..helper.ext_utils.bot_utils import cmd_exec, new_task
+from .telegram_manager import TgClient
+from .config_manager import Config
 from myjd import MyJdApi
 
 
@@ -27,7 +27,7 @@ class JDownloader(MyJdApi):
             self.is_connected = False
             self.error = "JDownloader Credentials not provided!"
             return
-        self.error = "Connecting... Try agin after couple of seconds"
+        self.error = "Connecting... Try again after couple of seconds"
         self._device_name = f"{randint(0, 1000)}@{TgClient.NAME}"
         if await path.exists("/JDownloader/logs"):
             LOGGER.info(

@@ -15,6 +15,7 @@ class GoogleDriveStatus:
         self._size = self.listener.size
         self._gid = gid
         self._status = status
+        self.tool = "gDriveApi"
         self.engine = eng
 
     def processed_bytes(self):

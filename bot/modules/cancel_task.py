@@ -1,7 +1,7 @@
 from asyncio import sleep
 
 from .. import task_dict, task_dict_lock, user_data, multi_tags
-from ..core.mltb_client import Config
+from ..core.config_manager import Config
 from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.status_utils import (
     get_task_by_gid,
@@ -49,7 +49,7 @@ async def cancel(_, message):
     if (
         Config.OWNER_ID != user_id
         and task.listener.user_id != user_id
-        and (user_id not in user_data or not user_data[user_id].get("is_sudo"))
+        and (user_id not in user_data or not user_data[user_id].get("SUDO"))
     ):
         await send_message(message, "This task is not for you!")
         return

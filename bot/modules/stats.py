@@ -34,6 +34,8 @@ async def bot_stats(_, message):
     total, used, free, disk = disk_usage("/")
     swap = swap_memory()
     memory = virtual_memory()
+    per_cpu = cpu_percent(interval=1, percpu=True)
+    per_cpu_str = " | ".join([f"CPU{i+1}: {round(p)}%" for i, p in enumerate(per_cpu)])
     stats = f"""
 <b>Commit Date:</b> {commands["commit"]}
 
@@ -46,25 +48,28 @@ async def bot_stats(_, message):
 <b>┌ Upload:</b> {get_readable_file_size(net_io_counters().bytes_sent)}
 <b>└ Download:</b> {get_readable_file_size(net_io_counters().bytes_recv)}
 
-<b>┌ CPU:</b> {cpu_percent(interval=0.5)}%
+<b>┌ CPU:</b> {cpu_percent(interval=1)}%
+<b>├ CPU Cores:</b>
+{per_cpu_str}
+
 <b>├ RAM:</b> {memory.percent}%
 <b>└ DISK:</b> {disk}%
 
 <b>┌ Physical Cores:</b> {cpu_count(logical=False)}
-<b>├ Total Cores:</b> {cpu_count(logical=True)}
+<b>├ Total Cores:</b> {cpu_count()}
 <b>└ SWAP:</b> {get_readable_file_size(swap.total)} | <b>Used:</b> {swap.percent}%
 
 <b>┌ Memory Total:</b> {get_readable_file_size(memory.total)}
 <b>├ Memory Free:</b> {get_readable_file_size(memory.available)}
 <b>└ Memory Used:</b> {get_readable_file_size(memory.used)}
 
-<b>┌ python:</b> {commands["python"]}
-<b>├ aria2:</b> {commands["aria2"]}
+<b>┌ Python:</b> {commands["python"]}
+<b>├ Aria2:</b> {commands["aria2"]}
 <b>├ qBittorrent:</b> {commands["qBittorrent"]}
 <b>├ SABnzbd+:</b> {commands["SABnzbd+"]}
-<b>├ rclone:</b> {commands["rclone"]}
+<b>├ Rclone:</b> {commands["rclone"]}
 <b>├ yt-dlp:</b> {commands["yt-dlp"]}
-<b>├ ffmpeg:</b> {commands["ffmpeg"]}
+<b>├ FFmpeg:</b> {commands["ffmpeg"]}
 <b>└ 7z:</b> {commands["7z"]}
 """
     await send_message(message, stats)

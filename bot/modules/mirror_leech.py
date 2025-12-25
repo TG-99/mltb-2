@@ -2,8 +2,7 @@ from aiofiles.os import path as aiopath
 from base64 import b64encode
 from re import match as re_match
 
-from .. import LOGGER, bot_loop, task_dict_lock
-from ..core.config_manager import Config
+from .. import LOGGER, bot_loop, task_dict_lock, DOWNLOAD_DIR
 from ..helper.ext_utils.bot_utils import (
     get_content_type,
     sync_to_async,
@@ -22,7 +21,7 @@ from ..helper.ext_utils.links_utils import (
 )
 from ..helper.listeners.task_listener import TaskListener
 from ..helper.mirror_leech_utils.download_utils.aria2_download import (
-    add_aria2c_download,
+    add_aria2_download,
 )
 from ..helper.mirror_leech_utils.download_utils.direct_downloader import (
     add_direct_download,
@@ -92,7 +91,9 @@ class Mirror(TaskListener):
             "-f": False,
             "-fd": False,
             "-fu": False,
-            "-ml": False,
+            "-hl": False,
+            "-bt": False,
+            "-ut": False,
             "-i": 0,
             "-sp": 0,
             "link": "",
@@ -102,7 +103,7 @@ class Mirror(TaskListener):
             "-rcf": "",
             "-au": "",
             "-ap": "",
-            "-h": "",
+            "-h": [],
             "-t": "",
             "-ca": "",
             "-cv": "",
@@ -132,13 +133,18 @@ class Mirror(TaskListener):
         self.convert_audio = args["-ca"]
         self.convert_video = args["-cv"]
         self.name_sub = args["-ns"]
-        self.mixed_leech = args["-ml"]
+        self.hybrid_leech = args["-hl"]
         self.thumbnail_layout = args["-tl"]
         self.as_doc = args["-doc"]
         self.as_med = args["-med"]
-        self.folder_name = f"/{args["-m"]}" if len(args["-m"]) > 0 else ""
+        self.folder_name = f"/{args["-m"]}".rstrip("/") if len(args["-m"]) > 0 else ""
+        self.bot_trans = args["-bt"]
+        self.user_trans = args["-ut"]
+        self.ffmpeg_cmds = args["-ff"]
 
         headers = args["-h"]
+        if headers:
+            headers = headers.split("|")
         is_bulk = args["-b"]
 
         bulk_start = 0
@@ -154,16 +160,6 @@ class Mirror(TaskListener):
         except:
             self.multi = 0
 
-        try:
-            if args["-ff"]:
-                if isinstance(args["-ff"], set):
-                    self.ffmpeg_cmds = args["-ff"]
-                else:
-                    self.ffmpeg_cmds = eval(args["-ff"])
-        except Exception as e:
-            self.ffmpeg_cmds = None
-            LOGGER.error(e)
-
         if not isinstance(self.seed, bool):
             dargs = self.seed.split(":")
             ratio = dargs[0] or None
@@ -173,17 +169,14 @@ class Mirror(TaskListener):
 
         if not isinstance(is_bulk, bool):
             dargs = is_bulk.split(":")
-            bulk_start = dargs[0] or 0
+            bulk_start = dargs[0] or "0"
             if len(dargs) == 2:
-                bulk_end = dargs[1] or 0
+                bulk_end = dargs[1] or "0"
             is_bulk = True
 
         if not is_bulk:
             if self.multi > 0:
                 if self.folder_name:
-                    self.seed = False
-                    ratio = None
-                    seed_time = None
                     async with task_dict_lock:
                         if self.folder_name in self.same_dir:
                             self.same_dir[self.folder_name]["tasks"].add(self.mid)
@@ -220,7 +213,7 @@ class Mirror(TaskListener):
 
         await self.get_tag(text)
 
-        path = f"{Config.DOWNLOAD_DIR}{self.mid}{self.folder_name}"
+        path = f"{DOWNLOAD_DIR}{self.mid}{self.folder_name}"
 
         if not self.link and (reply_to := self.message.reply_to_message):
             if reply_to.text:
@@ -343,6 +336,10 @@ class Mirror(TaskListener):
                         await send_message(self.message, e)
                         await self.remove_from_same_dir()
                         return
+                except Exception as e:
+                    await send_message(self.message, e)
+                    await self.remove_from_same_dir()
+                    return
 
         if file_ is not None:
             await TelegramDownloadHelper(self).add_download(
@@ -370,10 +367,10 @@ class Mirror(TaskListener):
             pssw = args["-ap"]
             if ussr or pssw:
                 auth = f"{ussr}:{pssw}"
-                headers += (
-                    f" authorization: Basic {b64encode(auth.encode()).decode('ascii')}"
+                headers.extend(
+                    [f"authorization: Basic {b64encode(auth.encode()).decode('ascii')}"]
                 )
-            await add_aria2c_download(self, path, headers, ratio, seed_time)
+            await add_aria2_download(self, path, headers, ratio, seed_time)
 
 
 async def mirror(client, message):

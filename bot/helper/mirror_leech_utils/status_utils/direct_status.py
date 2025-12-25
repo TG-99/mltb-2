@@ -10,6 +10,7 @@ class DirectStatus:
         self._gid = gid
         self._obj = obj
         self.listener = listener
+        self.tool = "aria2"
         self.engine = "Direct_link_generator"
 
     def gid(self):
@@ -41,7 +42,10 @@ class DirectStatus:
             return "-"
 
     def status(self):
-        if self._obj.download_task and self._obj.download_task.is_waiting:
+        if (
+            self._obj.download_task
+            and self._obj.download_task.get("status", "") == "waiting"
+        ):
             return MirrorStatus.STATUS_QUEUEDL
         return MirrorStatus.STATUS_DOWNLOAD
 

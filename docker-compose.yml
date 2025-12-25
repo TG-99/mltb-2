@@ -11,3 +11,4 @@ services:
       - "8090:8090"
     env_file:
       - .env
+    network_mode: "host"
