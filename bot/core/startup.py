@@ -258,9 +258,14 @@ async def load_configurations():
     ).wait()
 
     if Config.BASE_URL:
+        domain = Config.BASE_URL.replace("https://", "").replace("http://", "")
         nginx_conf_path = "web/nginx_config"
         with open(nginx_conf_path, "r") as f:
-            nginx_conf = f.read().replace("8080 default_server;", f"{environ.get('PORT')} default_server;")
+            nginx_conf = (
+                f.read()
+                .replace("8080 default_server;", f"{environ.get('PORT')} default_server;")
+                .replace("server_name _;", f"server_name {domain};")
+            )
             with open("/etc/nginx/sites-enabled/default", "w") as f:
                 f.write(nginx_conf)
             Popen(["nginx", "-g", "daemon off;"])
