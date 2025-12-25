@@ -125,7 +125,7 @@ async def confirm_restart(_, query):
             "pkill",
             "-9",
             "-f",
-            "gunicorn|mltb-a|mltb-q|mltb-f|mltb-r|java|mltb-s|7z|split|nginx",
+            "gunicorn|mltb_a|mltb_q|mltb_f|mltb_r|java|mltb_s|7z|split|nginx",
         )
         proc2 = await create_subprocess_exec("python3", "update.py")
         await gather(proc1.wait(), proc2.wait())

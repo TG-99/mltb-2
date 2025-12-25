@@ -198,7 +198,7 @@ class RcloneTransferHelper:
     async def _get_gdrive_link(self, config_path, destination, mime_type):
         epath = destination.rsplit("/", 1)[0] if mime_type == "Folder" else destination
         cmd = [
-            "rclone",
+            "mltb_r",
             "lsjson",
             "--fast-list",
             "--no-mimetype",
@@ -336,7 +336,7 @@ class RcloneTransferHelper:
             link = await self._get_gdrive_link(oconfig_path, destination, mime_type)
         else:
             cmd = [
-                "rclone",
+                "mltb_r",
                 "link",
                 "--config",
                 oconfig_path,
@@ -413,7 +413,7 @@ class RcloneTransferHelper:
                 )
             else:
                 cmd = [
-                    "rclone",
+                    "mltb_r",
                     "link",
                     "--config",
                     config_path,
@@ -450,7 +450,7 @@ class RcloneTransferHelper:
             source = f"{source.split(":")[0]}:"
             rclone_select = True
         cmd = [
-            "rclone",
+            "mltb_r",
             method,
             "--fast-list",
             "--config",
