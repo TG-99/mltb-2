@@ -5,15 +5,15 @@
     "jwt_secret": "random_generated",
     "token_expires_in": 48,
     "database": {
-      "type": "mysql",
-      "host": "sql.freedb.tech",
-      "port": 3306,
-      "user": "freedb_alist",
-      "password": "6BgQSPwu?Mj2Sr8",
-      "name": "freedb_alist1",
+      "type": "postgres",
+      "host": "ep-restless-silence-a11vdaxz.ap-southeast-1.pg.koyeb.app",
+      "port": 5432,
+      "user": "postgres-alist",
+      "password": "npg_Y2ilU7AvjQfo",
+      "name": "koyebdb",
       "db_file": "data\\data.db",
       "table_prefix": "alist_",
-      "ssl_mode": "",
+      "ssl_mode": "require",
       "dsn": ""
     },
     "meilisearch": {
