@@ -17,7 +17,6 @@ gunicorn
 httpx
 jinja2
 lxml
-motor
 natsort
 par2cmdline-turbo
 pillow
