@@ -1,6 +1,5 @@
 from os import environ
-from subprocess import Popen, run
-from time import time, sleep
+from subprocess import Popen
 from aiofiles.os import path as aiopath, remove, makedirs
 from aiofiles import open as aiopen
 from aioshutil import rmtree
@@ -259,24 +258,38 @@ async def load_configurations():
 
     if Config.BASE_URL:
         domain = Config.BASE_URL.replace("https://", "").replace("http://", "")
+        # Nginx Block
         nginx_conf_path = "web/nginx_config"
-        with open(nginx_conf_path, "r") as f:
-            nginx_conf = (
-                f.read()
-                .replace("8080 default_server;", f"{environ.get('PORT')} default_server;")
-                .replace("server_name _;", f"server_name {domain};")
+        async with aiopen(nginx_conf_path, "r") as src:
+            nginx_conf = await src.read()
+            nginx_conf = nginx_conf.replace("8080 default_server;", f"{environ.get('PORT')} default_server;"
+            ).replace(
+                "server_name _;", f"server_name {domain};"
             )
-            with open("/etc/nginx/sites-enabled/default", "w") as f:
-                f.write(nginx_conf)
-            Popen(["nginx", "-g", "daemon off;"])
+            async with aiopen("/etc/nginx/sites-enabled/default", "w") as dst:
+                await dst.write(nginx_conf)
+            await create_subprocess_exec("nginx", "-g", "daemon off;")
             LOGGER.info("Nginx server started successfully!")
+        # Alist Block
+        await makedirs("./data", exist_ok=True)
+        config_path = "./data/config.json"
+        source_path = "./web/config.json"
+        async with aiopen(source_path, "r") as src:
+            config_data = await src.read(
+            )
+            async with aiopen(config_path, "w") as dst:
+                await dst.write(config_data)
+            await create_subprocess_exec("mltb_al", "server", "--no-prefix", stdout=open("alist.txt", "a"), stderr=open("alist.txt", "a"))
+            LOGGER.info("Alist server started successfully!")
+
+    if Config.BASE_URL:
         await create_subprocess_shell(
             f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{Config.BASE_URL_PORT}"
         )
 
     if Config.BASE_URL:
         Popen(["python3", "alive.py"])
-        sleep(0.5)
+        await sleep(0.5)
 
     if await aiopath.exists("cfg.zip"):
         if await aiopath.exists("/JDownloader/cfg"):
