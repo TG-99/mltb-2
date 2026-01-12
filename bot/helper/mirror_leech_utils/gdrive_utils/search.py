@@ -1,8 +1,8 @@
 from logging import getLogger
 
-from bot import drives_names, drives_ids, index_urls, user_data
-from bot.helper.ext_utils.status_utils import get_readable_file_size
-from bot.helper.mirror_leech_utils.gdrive_utils.helper import GoogleDriveHelper
+from .... import drives_names, drives_ids, index_urls, user_data
+from ....helper.ext_utils.status_utils import get_readable_file_size
+from ....helper.mirror_leech_utils.gdrive_utils.helper import GoogleDriveHelper
 
 LOGGER = getLogger(__name__)
 
@@ -113,8 +113,8 @@ class GoogleDriveSearch(GoogleDriveHelper):
         else:
             drives = zip(drives_names, drives_ids, index_urls)
         if (
-            not target_id.startswith("mtp:")
-            and len(drives_ids) > 1
+            target_id.startswith("mtp:")
+            or (not target_id.startswith("mtp:") and len(drives_ids) > 1)
             or target_id.startswith("tp:")
         ):
             self.use_sa = False

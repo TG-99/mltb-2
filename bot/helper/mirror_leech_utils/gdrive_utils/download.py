@@ -61,6 +61,7 @@ class GoogleDriveDownload(GoogleDriveHelper):
             if self.listener.is_cancelled:
                 return
             async_to_sync(self.listener.on_download_complete)
+            return
 
     def _download_folder(self, folder_id, path, folder_name):
         folder_name = folder_name.replace("/", "")
@@ -82,9 +83,23 @@ class GoogleDriveDownload(GoogleDriveHelper):
                 mime_type = item.get("mimeType")
             if mime_type == self.G_DRIVE_DIR_MIME_TYPE:
                 self._download_folder(file_id, path, filename)
-            elif not ospath.isfile(
-                f"{path}{filename}"
-            ) and not filename.lower().endswith(tuple(self.listener.extension_filter)):
+            elif ospath.isfile(f"{path}{filename}"):
+                continue
+            elif (
+                self.listener.included_extensions
+                and not filename.strip()
+                .lower()
+                .endswith(tuple(self.listener.included_extensions))
+            ):
+                continue
+            elif (
+                not self.listener.included_extensions
+                and filename.strip()
+                .lower()
+                .endswith(tuple(self.listener.excluded_extensions))
+            ):
+                continue
+            else:
                 self._download_file(file_id, path, filename, mime_type)
             if self.listener.is_cancelled:
                 break
@@ -92,7 +107,7 @@ class GoogleDriveDownload(GoogleDriveHelper):
     @retry(
         wait=wait_exponential(multiplier=2, min=3, max=6),
         stop=stop_after_attempt(3),
-        retry=(retry_if_exception_type(Exception)),
+        retry=retry_if_exception_type(Exception),
     )
     def _download_file(self, file_id, path, filename, mime_type, export=False):
         if export:
@@ -110,12 +125,12 @@ class GoogleDriveDownload(GoogleDriveHelper):
             ext = ospath.splitext(filename)[1]
             filename = f"{filename[:245]}{ext}"
 
-            if self.listener.name.endswith(ext):
+            if self.listener.name.strip().endswith(ext):
                 self.listener.name = filename
         if self.listener.is_cancelled:
             return
         fh = FileIO(f"{path}/{filename}", "wb")
-        downloader = MediaIoBaseDownload(fh, request, chunksize=50 * 1024 * 1024)
+        downloader = MediaIoBaseDownload(fh, request, chunksize=100 * 1024 * 1024)
         done = False
         retries = 0
         while not done:

@@ -1,10 +1,8 @@
 from aiofiles.os import path as aiopath
 from base64 import b64encode
-from pyrogram.filters import command
-from pyrogram.handlers import MessageHandler
 from re import match as re_match
 
-from bot import bot, DOWNLOAD_DIR, LOGGER, bot_loop, task_dict_lock
+from .. import LOGGER, bot_loop, task_dict_lock, DOWNLOAD_DIR
 from ..helper.ext_utils.bot_utils import (
     get_content_type,
     sync_to_async,
@@ -22,7 +20,7 @@ from ..helper.ext_utils.links_utils import (
 )
 from ..helper.listeners.task_listener import TaskListener
 from ..helper.mirror_leech_utils.download_utils.aria2_download import (
-    add_aria2c_download,
+    add_aria2_download,
 )
 from ..helper.mirror_leech_utils.download_utils.direct_downloader import (
     add_direct_download,
@@ -40,8 +38,6 @@ from ..helper.mirror_leech_utils.download_utils.rclone_download import (
 from ..helper.mirror_leech_utils.download_utils.telegram_download import (
     TelegramDownloadHelper,
 )
-from ..helper.telegram_helper.bot_commands import BotCommands
-from ..helper.telegram_helper.filters import CustomFilters
 from ..helper.telegram_helper.message_utils import send_message, get_tg_link_message
 
 
@@ -93,7 +89,9 @@ class Mirror(TaskListener):
             "-f": False,
             "-fd": False,
             "-fu": False,
-            "-ml": False,
+            "-hl": False,
+            "-bt": False,
+            "-ut": False,
             "-i": 0,
             "-sp": 0,
             "link": "",
@@ -103,13 +101,13 @@ class Mirror(TaskListener):
             "-rcf": "",
             "-au": "",
             "-ap": "",
-            "-h": "",
+            "-h": [],
             "-t": "",
             "-ca": "",
             "-cv": "",
             "-ns": "",
             "-tl": "",
-            "-ff": "None",
+            "-ff": set(),
         }
 
         arg_parser(input_list[1:], args)
@@ -133,13 +131,18 @@ class Mirror(TaskListener):
         self.convert_audio = args["-ca"]
         self.convert_video = args["-cv"]
         self.name_sub = args["-ns"]
-        self.mixed_leech = args["-ml"]
+        self.hybrid_leech = args["-hl"]
         self.thumbnail_layout = args["-tl"]
         self.as_doc = args["-doc"]
         self.as_med = args["-med"]
-        self.folder_name = f"/{args["-m"]}" if len(args["-m"]) > 0 else ""
+        self.folder_name = f"/{args["-m"]}".rstrip("/") if len(args["-m"]) > 0 else ""
+        self.bot_trans = args["-bt"]
+        self.user_trans = args["-ut"]
+        self.ffmpeg_cmds = args["-ff"]
 
         headers = args["-h"]
+        if headers:
+            headers = headers.split("|")
         is_bulk = args["-b"]
 
         bulk_start = 0
@@ -155,12 +158,6 @@ class Mirror(TaskListener):
         except:
             self.multi = 0
 
-        try:
-            self.ffmpeg_cmds = eval(args["-ff"])
-        except Exception as e:
-            self.ffmpeg_cmds = None
-            LOGGER.error(e)
-
         if not isinstance(self.seed, bool):
             dargs = self.seed.split(":")
             ratio = dargs[0] or None
@@ -170,17 +167,14 @@ class Mirror(TaskListener):
 
         if not isinstance(is_bulk, bool):
             dargs = is_bulk.split(":")
-            bulk_start = dargs[0] or 0
+            bulk_start = dargs[0] or "0"
             if len(dargs) == 2:
-                bulk_end = dargs[1] or 0
+                bulk_end = dargs[1] or "0"
             is_bulk = True
 
         if not is_bulk:
             if self.multi > 0:
                 if self.folder_name:
-                    self.seed = False
-                    ratio = None
-                    seed_time = None
                     async with task_dict_lock:
                         if self.folder_name in self.same_dir:
                             self.same_dir[self.folder_name]["tasks"].add(self.mid)
@@ -188,12 +182,20 @@ class Mirror(TaskListener):
                                 if fd_name != self.folder_name:
                                     self.same_dir[fd_name]["total"] -= 1
                         elif self.same_dir:
-                            self.same_dir[self.folder_name] = {"total": self.multi, "tasks": {self.mid}}
+                            self.same_dir[self.folder_name] = {
+                                "total": self.multi,
+                                "tasks": {self.mid},
+                            }
                             for fd_name in self.same_dir:
                                 if fd_name != self.folder_name:
                                     self.same_dir[fd_name]["total"] -= 1
                         else:
-                            self.same_dir = {self.folder_name: {"total": self.multi, "tasks": {self.mid}}}
+                            self.same_dir = {
+                                self.folder_name: {
+                                    "total": self.multi,
+                                    "tasks": {self.mid},
+                                }
+                            }
                 elif self.same_dir:
                     async with task_dict_lock:
                         for fd_name in self.same_dir:
@@ -330,6 +332,10 @@ class Mirror(TaskListener):
                         await send_message(self.message, e)
                         await self.remove_from_same_dir()
                         return
+                except Exception as e:
+                    await send_message(self.message, e)
+                    await self.remove_from_same_dir()
+                    return
 
         if file_ is not None:
             await TelegramDownloadHelper(self).add_download(
@@ -352,10 +358,10 @@ class Mirror(TaskListener):
             pssw = args["-ap"]
             if ussr or pssw:
                 auth = f"{ussr}:{pssw}"
-                headers += (
-                    f" authorization: Basic {b64encode(auth.encode()).decode('ascii')}"
+                headers.extend(
+                    [f"authorization: Basic {b64encode(auth.encode()).decode('ascii')}"]
                 )
-            await add_aria2c_download(self, path, headers, ratio, seed_time)
+            await add_aria2_download(self, path, headers, ratio, seed_time)
 
 
 async def mirror(client, message):
@@ -392,61 +398,3 @@ async def nzb_leech(client, message):
     bot_loop.create_task(
         Mirror(client, message, is_leech=True, is_nzb=True).new_event()
     )
-
-
-bot.add_handler(
-    MessageHandler(
-        mirror,
-        filters=command(BotCommands.MirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        qb_mirror,
-        filters=command(BotCommands.QbMirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        jd_mirror,
-        filters=command(BotCommands.JdMirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        nzb_mirror,
-        filters=command(BotCommands.NzbMirrorCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        leech,
-        filters=command(BotCommands.LeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        qb_leech,
-        filters=command(BotCommands.QbLeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        jd_leech,
-        filters=command(BotCommands.JdLeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
-bot.add_handler(
-    MessageHandler(
-        nzb_leech,
-        filters=command(BotCommands.NzbLeechCommand, case_sensitive=True)
-        & CustomFilters.authorized,
-    )
-)
