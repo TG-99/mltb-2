@@ -3,6 +3,7 @@ from ....helper.ext_utils.status_utils import (
     get_readable_file_size,
     get_readable_time,
 )
+from importlib.metadata import version
 
 
 class UphosterStatus:
@@ -12,7 +13,7 @@ class UphosterStatus:
         self._size = self.listener.size
         self._gid = gid
         self._status = status
-        self.engine = STATUS_UPHOSTER
+        self.engine = f"kurigram v{version("kurigram")}"
 
     def processed_bytes(self):
         return get_readable_file_size(self._obj.processed_bytes)
