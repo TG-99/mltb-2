@@ -42,7 +42,7 @@ from ..mirror_leech_utils.status_utils.queue_status import QueueStatus
 from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from ..mirror_leech_utils.status_utils.telegram_status import TelegramStatus
 from ..mirror_leech_utils.telegram_uploader import TelegramUploader
-from ..mirror_leech_utils.ddl_utils.gofile_utils.upload import GoFileUpload
+from ..mirror_leech_utils.uphoster_utils.gofile_utils.upload import GoFileUpload
 from ..mirror_leech_utils.status_utils.uphoster_status import UphosterStatus
 from ..telegram_helper.button_build import ButtonMaker
 from ..telegram_helper.message_utils import (
