@@ -62,7 +62,7 @@ class Config:
     TORRENT_TIMEOUT = 0
     UPLOAD_PATHS = {}
     UPSTREAM_REPO = ""
-    UPSTREAM_BRANCH = "main"
+    UPSTREAM_BRANCH = "master"
     USENET_SERVERS = []
     USER_SESSION_STRING = ""
     USER_TRANSMISSION = False
@@ -154,8 +154,8 @@ class Config:
         if isinstance(converted_value, str):
             converted_value = converted_value.strip()
 
-        if attr == "DEFAULT_UPLOAD" and converted_value != "rc" and converted_value != "ddl":
-            return "gd"
+        if attr == "DEFAULT_UPLOAD" and converted_value != "gd":
+            return "rc"
 
         if attr in {
             "BASE_URL",

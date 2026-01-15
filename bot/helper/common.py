@@ -272,13 +272,11 @@ class TaskConfig:
             )
             if (not self.up_dest and default_upload == "rc") or self.up_dest == "rc":
                 self.up_dest = self.user_dict.get("RCLONE_PATH") or Config.RCLONE_PATH
-            elif (not self.up_dest and default_upload == "ddl") or self.up_dest == "ddl":
-                self.up_dest = "ddl"
             elif (not self.up_dest and default_upload == "gd") or self.up_dest == "gd":
                 self.up_dest = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
             if not self.up_dest:
                 raise ValueError("No Upload Destination!")
-            if self.up_dest not in ["rcl", "gdl", "ddl"]:
+            if self.up_dest not in ["rcl", "gdl"]:
                 if is_gdrive_id(self.up_dest):
                     if not self.up_dest.startswith(
                         ("mtp:", "tp:", "sa:")
@@ -290,8 +288,6 @@ class TaskConfig:
                     ):
                         self.up_dest = f"mrcc:{self.up_dest}"
                     self.up_dest = self.up_dest.strip("/")
-                elif (not self.up_dest and default_upload == "ddl") or self.up_dest == "ddl":
-                    self.up_dest = "ddl"
                 else:
                     raise ValueError("Wrong Upload Destination!")
                 await self.is_token_exists(self.up_dest, "up")
@@ -556,7 +552,7 @@ class TaskConfig:
             msg.append(f"{self.bulk[0]} -i {self.multi - 1} {self.options}")
             msgts = " ".join(msg)
             if self.multi > 2:
-                msgts += f"\n<b>└ To Stop 👉 :</b> Cancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
+                msgts += f"\nCancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
             nextmsg = await send_message(self.message, msgts)
         else:
             msg = [s.strip() for s in input_list]
@@ -568,7 +564,7 @@ class TaskConfig:
             )
             msgts = " ".join(msg)
             if self.multi > 2:
-                msgts += f"\n<b>└ To Stop 👉 :</b> Cancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
+                msgts += f"\nCancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
             nextmsg = await send_message(nextmsg, msgts)
         nextmsg = await self.client.get_messages(
             chat_id=self.message.chat.id, message_ids=nextmsg.id
@@ -609,7 +605,7 @@ class TaskConfig:
             if len(self.bulk) > 2:
                 self.multi_tag = token_urlsafe(3)
                 multi_tags.add(self.multi_tag)
-                msg += f"\n<b>└ To Stop 👉 :</b> Cancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
+                msg += f"\nCancel Multi: <code>/{BotCommands.CancelTaskCommand[1]} {self.multi_tag}</code>"
             nextmsg = await send_message(self.message, msg)
             nextmsg = await self.client.get_messages(
                 chat_id=self.message.chat.id, message_ids=nextmsg.id

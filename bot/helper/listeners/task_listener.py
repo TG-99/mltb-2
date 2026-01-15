@@ -42,8 +42,6 @@ from ..mirror_leech_utils.status_utils.queue_status import QueueStatus
 from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from ..mirror_leech_utils.status_utils.telegram_status import TelegramStatus
 from ..mirror_leech_utils.telegram_uploader import TelegramUploader
-from ..mirror_leech_utils.status_utils.ddl_status import DDLStatus
-from ..mirror_leech_utils.ddl_utils.ddlEngine import DDLUploader
 from ..telegram_helper.button_build import ButtonMaker
 from ..telegram_helper.message_utils import (
     send_message,
@@ -309,18 +307,6 @@ class TaskListener(TaskConfig):
                 sync_to_async(drive.upload),
             )
             del drive
-        elif self.up_dest == "ddl":
-            size = await get_path_size(up_path)
-            LOGGER.info(f"Upload Name: {self.name} via DDL")
-            ddl = DDLUploader(self, self.name, up_dir)
-            ddl_upload_status = DDLStatus(self, ddl, size, gid, "up")
-            async with task_dict_lock:
-                task_dict[self.mid] = ddl_upload_status
-            await gather(
-                update_status_message(self.message.chat.id),
-                ddl.upload(self.name, size),
-            )
-            del ddl
         else:
             LOGGER.info(f"Rclone Upload Name: {self.name}")
             RCTransfer = RcloneTransferHelper(self)
@@ -374,10 +360,7 @@ class TaskListener(TaskConfig):
                 and not self.private_link
             ):
                 buttons = ButtonMaker()
-                if (is_DDL := isinstance(link, dict)):
-                    for ddlserver, dlink in link.items():
-                        buttons.url_button(f"🚀 {ddlserver} Link", dlink)
-                elif link:
+                if link:
                     buttons.url_button("☁️ Cloud Link", link)
                 else:
                     msg += f"\n<b>├ Path: </b><code>{rclone_path}</code>"
@@ -388,7 +371,7 @@ class TaskListener(TaskConfig):
                     if mime_type == "Folder":
                         share_url += "/"
                     buttons.url_button("🔗 Rclone Link", share_url)
-                if not rclone_path and dir_id and not is_DDL:
+                if not rclone_path and dir_id:
                     INDEX_URL = ""
                     if self.private_link:
                         INDEX_URL = self.user_dict.get("INDEX_URL", "") or ""

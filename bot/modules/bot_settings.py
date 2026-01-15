@@ -62,8 +62,8 @@ DEFAULT_VALUES = {
     "RSS_DELAY": 600,
     "STATUS_UPDATE_INTERVAL": 15,
     "SEARCH_LIMIT": 0,
-    "UPSTREAM_BRANCH": "main",
-    "DEFAULT_UPLOAD": "gd",
+    "UPSTREAM_BRANCH": "master",
+    "DEFAULT_UPLOAD": "rc",
 }
 
 

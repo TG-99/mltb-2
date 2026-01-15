@@ -5,16 +5,15 @@ from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import send_message, edit_message, send_file
 from ..helper.telegram_helper.filters import CustomFilters
 from ..helper.telegram_helper.bot_commands import BotCommands
-from ..core.config_manager import Config
 
 
 @new_task
 async def start(_, message):
     buttons = ButtonMaker()
     buttons.url_button(
-        "GD Index", "https://gdrive.blactape75.tech"
+        "Repo", "https://www.github.com/anasty17/mirror-leech-telegram-bot"
     )
-    buttons.url_button("Web Server", f"{Config.BASE_URL}")
+    buttons.url_button("Code Owner", "https://t.me/anas_tayyar")
     reply_markup = buttons.build_menu(2)
     if await CustomFilters.authorized(_, message):
         start_string = f"""
