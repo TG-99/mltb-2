@@ -381,7 +381,7 @@ class TaskListener(TaskConfig):
         return
 
     async def on_upload_complete(
-        self, link, files, folders, mime_type, rclone_path="", dir_id=""
+        self, link, files, folders, mime_type, upload_result="", rclone_path="", dir_id=""
     ):
         if (
             self.is_super_chat
