@@ -154,7 +154,7 @@ class Config:
         if isinstance(converted_value, str):
             converted_value = converted_value.strip()
 
-        if attr == "DEFAULT_UPLOAD" and converted_value != "rc" and converted_value != "ddl":
+        if attr == "DEFAULT_UPLOAD" and converted_value != "rc" and converted_value != "yt" and converted_value != "ddl":
             return "gd"
 
         if attr in {

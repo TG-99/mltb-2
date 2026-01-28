@@ -70,6 +70,7 @@ class TaskConfig:
         self.up_dir = ""
         self.link = ""
         self.up_dest = ""
+        self.raw_up_dest = ""
         self.rc_flags = ""
         self.tag = ""
         self.name = ""
@@ -272,13 +273,15 @@ class TaskConfig:
             )
             if (not self.up_dest and default_upload == "rc") or self.up_dest == "rc":
                 self.up_dest = self.user_dict.get("RCLONE_PATH") or Config.RCLONE_PATH
+            elif (not self.up_dest and default_upload == "yt") or self.up_dest == "yt":
+                self.up_dest = "yt"
             elif (not self.up_dest and default_upload == "ddl") or self.up_dest == "ddl":
                 self.up_dest = "ddl"
             elif (not self.up_dest and default_upload == "gd") or self.up_dest == "gd":
                 self.up_dest = self.user_dict.get("GDRIVE_ID") or Config.GDRIVE_ID
             if not self.up_dest:
                 raise ValueError("No Upload Destination!")
-            if self.up_dest not in ["rcl", "gdl", "ddl"]:
+            if self.up_dest not in ["rcl", "gdl", "yt", "ddl"]:
                 if is_gdrive_id(self.up_dest):
                     if not self.up_dest.startswith(
                         ("mtp:", "tp:", "sa:")
@@ -290,6 +293,8 @@ class TaskConfig:
                     ):
                         self.up_dest = f"mrcc:{self.up_dest}"
                     self.up_dest = self.up_dest.strip("/")
+                elif (not self.up_dest and default_upload == "yt") or self.up_dest == "yt":
+                    self.up_dest = "yt"
                 elif (not self.up_dest and default_upload == "ddl") or self.up_dest == "ddl":
                     self.up_dest = "ddl"
                 else:

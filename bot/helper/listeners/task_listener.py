@@ -41,7 +41,9 @@ from ..mirror_leech_utils.status_utils.gdrive_status import GoogleDriveStatus
 from ..mirror_leech_utils.status_utils.queue_status import QueueStatus
 from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from ..mirror_leech_utils.status_utils.telegram_status import TelegramStatus
+from bot.helper.mirror_leech_utils.status_utils.yt_status import YtStatus
 from ..mirror_leech_utils.telegram_uploader import TelegramUploader
+from bot.helper.mirror_leech_utils.youtube_utils.youtube_upload import YouTubeUpload
 from ..mirror_leech_utils.status_utils.ddl_status import DDLStatus
 from ..mirror_leech_utils.ddl_utils.ddlEngine import DDLUploader
 from ..telegram_helper.button_build import ButtonMaker
@@ -289,6 +291,20 @@ class TaskListener(TaskConfig):
 
         self.size = await get_path_size(up_dir)
 
+        upload_service = ""
+
+        if self.raw_up_dest == "yt":
+            upload_service = "yt"
+        elif self.raw_up_dest == "gd":
+            upload_service = "gd"
+        elif self.raw_up_dest == "rc":
+            upload_service = "rc"
+
+        if not upload_service:
+            upload_service = self.user_dict.get(
+                "DEFAULT_UPLOAD", Config.DEFAULT_UPLOAD
+            )
+
         if self.is_leech:
             LOGGER.info(f"Leech Name: {self.name}")
             tg = TelegramUploader(self, up_dir)
@@ -299,6 +315,16 @@ class TaskListener(TaskConfig):
                 tg.upload(),
             )
             del tg
+        elif upload_service == "yt":
+            LOGGER.info(f"Uploading to YouTube: {self.name} (Service selected: yt)")
+            yt = YouTubeUpload(self, up_path)
+            async with task_dict_lock:
+                task_dict[self.mid] = YtStatus(self, yt, gid)
+            await gather(
+                update_status_message(self.message.chat.id),
+                sync_to_async(yt.upload),
+            )
+            del yt
         elif is_gdrive_id(self.up_dest):
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
             drive = GoogleDriveUpload(self, up_path)
@@ -345,6 +371,35 @@ class TaskListener(TaskConfig):
         msg = f"<b>┌ Name: </b><code>{escape(self.name)}</code>\n<b>├ Size: </b>{get_readable_file_size(self.size)}"
         msg += f"\n<b>├ Elapsed</b>: {get_readable_time(time() - self.message.date.timestamp())}"
         LOGGER.info(f"Task Done: {self.name}")
+        # Determine the upload service for message formatting
+        upload_service = ""
+        if self.raw_up_dest == "yt" or (
+            self.raw_up_dest and self.raw_up_dest.startswith("yt:")
+        ):
+            upload_service = "yt"
+        elif self.raw_up_dest == "gd":
+            upload_service = "gd"
+        elif self.raw_up_dest == "rc":
+            upload_service = "rc"
+
+        if not upload_service:  # If -up didn't specify a service directly
+            upload_service = self.user_dict.get(
+                "DEFAULT_UPLOAD", Config.DEFAULT_UPLOAD
+            )
+
+        if upload_service == "yt":
+            msg += "\n<b>Type: </b>Video/Playlist"  # Updated to reflect it can be a playlist
+            if link:
+                msg += f"\n<b>Link: </b><a href='{link}'>Link</a>"  # Generic "Link" as it can be video or playlist
+            msg += f"\n\n<b>cc: </b>{self.tag}"
+
+            await send_message(self.user_id, msg)
+            if Config.LOG_CHAT_ID:
+                await send_message(int(Config.LOG_CHAT_ID), msg)
+            await send_message(
+                self.message,
+                f"{self.tag}\nYour video has been uploaded to YouTube successfully!",
+            )
         if self.is_leech:
             msg += f"\n<b>├ Total Files: </b>{folders}"
             if mime_type != 0:
