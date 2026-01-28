@@ -422,11 +422,6 @@ class TaskListener(TaskConfig):
                         self.user_id,
                         f"{msg}<blockquote expandable>{fmsg}</blockquote>",
                     )
-                    if Config.LOG_CHAT_ID:
-                        await send_message(
-                            int(Config.LOG_CHAT_ID),
-                            f"{msg}<blockquote expandable>{fmsg}</blockquote>",
-                        )
                 await send_message(self.message, done_msg)
         elif upload_service == "yt":
             playlist_url = (
@@ -481,8 +476,6 @@ class TaskListener(TaskConfig):
 
                 for part in messages_to_send:
                     await send_message(self.user_id, part)
-                    if Config.LOG_CHAT_ID:
-                        await send_message(int(Config.LOG_CHAT_ID), part)
                     await sleep(1)
 
             else:
@@ -535,15 +528,11 @@ class TaskListener(TaskConfig):
 
                 for part in messages_to_send:
                     await send_message(self.user_id, part)
-                    if Config.LOG_CHAT_ID:
-                        await send_message(int(Config.LOG_CHAT_ID), part)
                     await sleep(1)
 
             if isinstance(upload_result, str):
                 error_message = f"<b>Name: </b><code>{escape(self.name)}</code>\n\n<b>Size: </b>{get_readable_file_size(self.size)}\n\n<b>YT Upload Error: </b>{escape(upload_result)}\n\n<b>cc: </b>{self.tag}"
                 await send_message(self.user_id, error_message)
-                if Config.LOG_CHAT_ID:
-                    await send_message(int(Config.LOG_CHAT_ID), error_message)
 
             await send_message(
                 self.message,
