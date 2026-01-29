@@ -25,6 +25,7 @@ from tenacity import (
     RetryError,
 )
 
+from ... import intervals
 from ...core.config_manager import Config
 from ...core.telegram_manager import TgClient
 from ..ext_utils.bot_utils import sync_to_async
@@ -181,7 +182,6 @@ class TelegramUploader:
             self._sent_msg = (
                 await self._sent_msg.reply_media_group(
                     media=batch,
-                    quote=True,
                     disable_notification=True,
                 )
             )[-1]
@@ -198,7 +198,6 @@ class TelegramUploader:
                 )
         msgs_list = await msgs[0].reply_to_message.reply_media_group(
             media=self._get_input_media(subkey, key),
-            quote=True,
             disable_notification=True,
         )
         for msg in msgs:
@@ -227,6 +226,8 @@ class TelegramUploader:
                 self._error = ""
                 self._up_path = f_path = ospath.join(dirpath, file_)
                 if not await aiopath.exists(self._up_path):
+                    if intervals["stopAll"]:
+                        return
                     LOGGER.error(f"{self._up_path} not exists! Continue uploading!")
                     continue
                 try:
@@ -359,7 +360,6 @@ class TelegramUploader:
                     thumb = None
                 self._sent_msg = await self._sent_msg.reply_document(
                     document=self._up_path,
-                    quote=True,
                     thumb=thumb,
                     caption=cap_mono,
                     force_document=True,
@@ -389,7 +389,6 @@ class TelegramUploader:
                     thumb = None
                 self._sent_msg = await self._sent_msg.reply_video(
                     video=self._up_path,
-                    quote=True,
                     caption=cap_mono,
                     duration=duration,
                     width=width,
@@ -408,7 +407,6 @@ class TelegramUploader:
                     thumb = None
                 self._sent_msg = await self._sent_msg.reply_audio(
                     audio=self._up_path,
-                    quote=True,
                     caption=cap_mono,
                     duration=duration,
                     performer=artist,
@@ -423,7 +421,6 @@ class TelegramUploader:
                     return
                 self._sent_msg = await self._sent_msg.reply_photo(
                     photo=self._up_path,
-                    quote=True,
                     caption=cap_mono,
                     disable_notification=True,
                     progress=self._upload_progress,
