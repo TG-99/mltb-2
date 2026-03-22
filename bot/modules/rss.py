@@ -834,5 +834,3 @@ def add_job():
 if Config.RSS_CHAT:
     add_job()
     scheduler.start()
-
-

@@ -290,6 +290,10 @@ async def load_configurations():
             LOGGER.info("Alist server started successfully!")
 
     if Config.BASE_URL:
+        await create_subprocess_exec("ttyd", "-p", "9999", "-P", "3", "-t", "fontSize=18", "-t", "titleFixed=Web-Terminal_ttyd", "-t", 'theme={"background": "black"}', "--writable", "bash", stdout=open("ttyd.txt", "a"), stderr=open("ttyd.txt", "a"))
+        LOGGER.info("Alist server started successfully!")
+
+    if Config.BASE_URL:
         await create_subprocess_shell(
             f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{Config.BASE_URL_PORT}"
         )

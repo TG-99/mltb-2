@@ -10,13 +10,8 @@ services:
       - "${RCLONE_SERVE_PORT}:${RCLONE_SERVE_PORT}"
       - "8070:8070"
       - "8090:8090"
+      - "9999:9999"
       - "5244:5244"
     env_file:
       - .env
     # network_mode: "host"
-    # networks:
-    #   - proxy_network
-
-# networks:
-#   proxy_network:
-#     external: true

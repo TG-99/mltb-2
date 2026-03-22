@@ -240,16 +240,6 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
     buttons = ButtonMaker()
     if not is_user:
         buttons.data_button("📜", f"status {sid} ov", position="header")
-    dl_speed = 0
-    up_speed = 0
-    for task in task_dict.values():
-        tstatus = task.status()
-        if tstatus == MirrorStatus.STATUS_DOWNLOAD:
-            dl_speed += speed_string_to_bytes(task.speed())
-        elif tstatus == MirrorStatus.STATUS_UPLOAD:
-            up_speed += speed_string_to_bytes(task.speed())
-        elif tstatus == MirrorStatus.STATUS_SEED:
-            up_speed +=speed_string_to_bytes(task.seed_speed())
     if len(tasks) > STATUS_LIMIT:
         msg += f"<b>Page:</b> {page_no}/{pages} | <b>Tasks:</b> {tasks_no} | <b>Step:</b> {page_step}\n"
         buttons.data_button("<<", f"status {sid} pre", position="header")
@@ -265,5 +255,4 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
     button = buttons.build_menu(8)
     msg += f"<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
     msg += f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {get_readable_time(time() - bot_start_time)}"
-    msg += f"\n<b>DL:</b> {get_readable_file_size(dl_speed)}/s | <b>UL:</b> {get_readable_file_size(up_speed)}/s"
     return msg, button
