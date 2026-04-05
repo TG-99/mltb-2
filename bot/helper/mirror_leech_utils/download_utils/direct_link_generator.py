@@ -614,11 +614,17 @@ def onedrive(link):
 def pixeldrain(url):
     try:
         url = url.rstrip("/")
-        code = url.split("/")[-1].split("?", 1)[0]
-        response = get("https://pd.cybar.xyz/", allow_redirects=True)
-        return response.url + code
+        api_url = f"https://pdb.rir18.workers.dev/?url={url}"
+        response = get(api_url, timeout=10)
+        data = response.json()
+        if data.get("success") and "url" in data:
+            direct_url = data["url"]
+            if not direct_url.startswith("http"):
+                direct_url = "https://" + direct_url
+            return direct_url
+        raise Exception("Invalid API response")
     except Exception as e:
-        raise DirectDownloadLinkException("ERROR: Direct link not found")
+        raise DirectDownloadLinkException(str(e))
 
 
 def streamtape(url):
@@ -1102,7 +1108,7 @@ def gofile(url):
     def __fetch_links(session, _id, folderPath=""):
         _url = f"https://api.gofile.io/contents/{_id}?cache=true"
         time_slot = int(time()) // 14400
-        raw = f"{user_agent}::en-US::{token}::{time_slot}::gf2026x"
+        raw = f"{user_agent}::en-US::{token}::{time_slot}::5d4f7g8sd45fsd"
         wt = sha256(raw.encode()).hexdigest()
         headers = {
             "User-Agent": user_agent,
